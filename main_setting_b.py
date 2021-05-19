@@ -31,17 +31,16 @@ def instantiate_from_config(config):
 if __name__ == "__main__":
 
     # ONLY MODIFY SETTING HERE
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
     batch_size = 2
     learning_rate = 4.5e-6
-    ne = 64
+    ne = 512
     ed = 512
     epoch_start = 1
-    epoch_end = 400
-
-    # dataloader
-    # root = './root/'
+    epoch_end = 1
     root = '/eva_data/yujie/datasets/cat2dog'
+
+
     train_data = dataset_combine(root, 'train', 286, 256)
     # validation_data = dataset_single(root, 'test', 'A')
 
