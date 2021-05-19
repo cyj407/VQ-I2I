@@ -1,0 +1,25 @@
+.vscode/
+__pycache__/
+
+# reconstructions
+res/
+
+# model
+a_model*/
+afhq*/
+both*/
+cat*/
+dog*/
+ln*/
+setting_c*/
+
+# add taming module by `git add -f [dir_name]`
+taming*/
+
+# add config file by `git add -f [config.yaml]`
+*.yaml
+
+*.sh
+*.ipynb
+*.txt
+avg_indices.py
