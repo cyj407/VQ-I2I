@@ -11,9 +11,6 @@ from torch.utils.data import DataLoader
 import os
 
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1, 2"
-# device_ids = [0, 1]
 
 def get_obj_from_str(string, reload=False):
     module, cls = string.rsplit(".", 1)
@@ -33,23 +30,31 @@ def instantiate_from_config(config):
 
 if __name__ == "__main__":
 
-    # hyperparameters
+    # ONLY MODIFY SETTING HERE
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     batch_size = 2
     learning_rate = 4.5e-6
+    ne = 64
+    ed = 512
+    epoch_start = 1
+    epoch_end = 400
 
     # dataloader
     # root = './root/'
     root = '/eva_data/yujie/datasets/cat2dog'
-    train_data = dataset_combine(root, 'train')
+    train_data = dataset_combine(root, 'train', 286, 256)
     # validation_data = dataset_single(root, 'test', 'A')
 
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True)
 
     # model
-    save_path = 'both_512_64'
+    save_path = 'both_{}_{}'.format(ed, ne)
 
     f = os.path.join(os.getcwd(), save_path, 'vqgan_latest.pt')
     config = OmegaConf.load('config_comb.yaml')
+    config.model.base_learning_rate = learning_rate
+    config.model.params.embed_dim = ed
+    config.model.params.n_embed = ne
     model = instantiate_from_config(config.model)
     if(os.path.isfile(f)):
         print('load ' + f)
@@ -58,7 +63,7 @@ if __name__ == "__main__":
     model.to(device)
     model.train()
 
-    print(model.loss.discriminator)
+    # print(model.loss.discriminator)
     
     opt_ae = torch.optim.Adam(list(model.encoder.parameters())+
                                 list(model.decoder_a.parameters())+
@@ -89,7 +94,7 @@ if __name__ == "__main__":
         os.mkdir(save_path)
 
 
-    for epoch in range(401, 600+1):
+    for epoch in range(epoch_start, epoch_end+1):
         for i in range(iterations):
             data, label = next(iter(train_loader))
             data = data.to(device)
@@ -137,12 +142,12 @@ if __name__ == "__main__":
                     f.write(_rec)
                     f.close()
 
-        # torch.save(
-        #     {
-        #         'model_state_dict': model.state_dict(),
-        #         'opt_ae_state_dict': opt_ae.state_dict(),
-        #         'opt_dic_state_dict': opt_disc.state_dict()
-        #     }, os.path.join(os.getcwd(), save_path, 'vqgan_latest.pt'))
+        torch.save(
+            {
+                'model_state_dict': model.state_dict(),
+                'opt_ae_state_dict': opt_ae.state_dict(),
+                'opt_dic_state_dict': opt_disc.state_dict()
+            }, os.path.join(os.getcwd(), save_path, 'vqgan_latest.pt'))
 
 
         if(epoch % 50 == 0 and epoch >= 50):
@@ -152,10 +157,10 @@ if __name__ == "__main__":
                     'opt_ae_state_dict': opt_ae.state_dict(),
                     'opt_dic_state_dict': opt_disc.state_dict()
                 }, os.path.join(os.getcwd(), save_path, 'vqgan_{}.pt'.format(epoch)))
-            torch.save(
-                {
-                    'model_state_dict': model.state_dict(),
-                    'opt_ae_state_dict': opt_ae.state_dict(),
-                    'opt_dic_state_dict': opt_disc.state_dict()
-                }, os.path.join(os.getcwd(), save_path, 'vqgan_latest.pt'))
+            # torch.save(
+            #     {
+            #         'model_state_dict': model.state_dict(),
+            #         'opt_ae_state_dict': opt_ae.state_dict(),
+            #         'opt_dic_state_dict': opt_disc.state_dict()
+            #     }, os.path.join(os.getcwd(), save_path, 'vqgan_latest.pt'))
 

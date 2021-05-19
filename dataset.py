@@ -71,7 +71,10 @@ class dataset_combine(data.Dataset):
         self.imgs = A + B
 
         # 0 represents class A, 1 represents class B
-        labels = [0] * len(images_a) + [1] * len(images_b)
+        # labels = [0] * len(images_a) + [1] * len(images_b)
+        
+        # 1 represents class A, 0 represents class B
+        labels = [1] * len(images_a) + [0] * len(images_b)
         labels = torch.Tensor(labels)
         self.labels = labels
 
