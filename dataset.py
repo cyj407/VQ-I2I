@@ -7,57 +7,115 @@ import torch
 import numpy as np
 
 class dataset_single(data.Dataset):
-	def __init__(self, root, mode, _class, resize=256, cropsize=256):
-		self.root = root
+    def __init__(self, root, mode, _class, resize=256, cropsize=256):
+        self.root = root
 
-		# a
-		images_a = os.listdir(os.path.join(self.root, mode + _class))
-		self.A = [os.path.join(self.root, mode + _class, x) for x in images_a]
-		self.A_size = len(self.A)
+        # a
+        images_a = os.listdir(os.path.join(self.root, mode + _class))
+        self.A = [os.path.join(self.root, mode + _class, x) for x in images_a]
+        self.A_size = len(self.A)
 
-		# b
-		# images_b = os.listdir(os.path.join(self.root, mode + 'B'))
-		# self.B = [os.path.join(self.root, mode + 'B', x) for x in images_b]
-		self.B_size = 0 #len(self.B)
+        # b
+        # images_b = os.listdir(os.path.join(self.root, mode + 'B'))
+        # self.B = [os.path.join(self.root, mode + 'B', x) for x in images_b]
+        self.B_size = 0 #len(self.B)
 
-		self.dataset_size = max(self.A_size, self.B_size)
-		self.input_dim_A = 3
-		self.input_dim_B = 3
+        self.dataset_size = max(self.A_size, self.B_size)
+        self.input_dim_A = 3
+        self.input_dim_B = 3
 
-		## resize size
-		transforms = [Resize((resize, resize), Image.BICUBIC)]
-		if(mode == 'train'):
-			transforms.append(RandomCrop(cropsize))
-		else:
-			transforms.append(CenterCrop(cropsize))
+        ## resize size
+        transforms = [Resize((resize, resize), Image.BICUBIC)]
+        if(mode == 'train'):
+            transforms.append(RandomCrop(cropsize))
+        else:
+            transforms.append(CenterCrop(cropsize))
 
-		## flip
-		transforms.append(RandomHorizontalFlip())
+        ## flip
+        transforms.append(RandomHorizontalFlip())
 
-		transforms.append(ToTensor())
-		transforms.append(Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]))
-		self.transforms = Compose(transforms)
-		return
+        transforms.append(ToTensor())
+        transforms.append(Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]))
+        self.transforms = Compose(transforms)
+        return
 
-	def __getitem__(self, index):
-		if(self.dataset_size == self.A_size):
-			data_A = self.load_img(self.A[index], self.input_dim_A)
-			# data_B = self.load_img(self.B[random.randint(0, self.B_size -1)], self.input_dim_B)
-		# else:
-			# data_A = self.load_img(self.A[random.randint(0, self.A_size -1)], self.input_dim_A)
-			# data_B = self.load_img(self.B[index], self.input_dim_B)
-		return data_A#, data_B
+    def __getitem__(self, index):
+        if(self.dataset_size == self.A_size):
+            data_A = self.load_img(self.A[index], self.input_dim_A)
+            # data_B = self.load_img(self.B[random.randint(0, self.B_size -1)], self.input_dim_B)
+        # else:
+            # data_A = self.load_img(self.A[random.randint(0, self.A_size -1)], self.input_dim_A)
+            # data_B = self.load_img(self.B[index], self.input_dim_B)
+        return data_A#, data_B
 
-	def __len__(self):
-		return self.dataset_size
+    def __len__(self):
+        return self.dataset_size
 
-	def load_img(self, img_name, input_dim):
-		img = Image.open(img_name).convert('RGB')
-		img = self.transforms(img)
-		if(input_dim == 1):
-			img = img[0, ...] * 0.299 + img[1, ...] * 0.587 + img[2, ...] * 0.114
-			img = img.unsqueeze(0)
-		return img
+    def load_img(self, img_name, input_dim):
+        img = Image.open(img_name).convert('RGB')
+        img = self.transforms(img)
+        if(input_dim == 1):
+            img = img[0, ...] * 0.299 + img[1, ...] * 0.587 + img[2, ...] * 0.114
+            img = img.unsqueeze(0)
+        return img
+
+
+class dataset_unpair(data.Dataset):
+    def __init__(self, root, mode, _class, resize=256, cropsize=256):
+        self.root = root
+
+        # a
+        images_a = os.listdir(os.path.join(self.root, mode + 'A'))
+        self.A = [os.path.join(self.root, mode + 'A', x) for x in images_a]
+        self.A_size = len(self.A)
+
+        # b
+        images_b = os.listdir(os.path.join(self.root, mode + 'B'))
+        self.B = [os.path.join(self.root, mode + 'B', x) for x in images_b]
+        self.B_size = len(self.B)
+
+        self.labels_a = torch.Tensor([1] * len(images_a))
+        self.labels_b = torch.Tensor([0] * len(images_b))
+
+        self.dataset_size = max(self.A_size, self.B_size)
+        self.input_dim_A = 3
+        self.input_dim_B = 3
+
+        ## resize size
+        transforms = [Resize((resize, resize), Image.BICUBIC)]
+        if(mode == 'train'):
+            transforms.append(RandomCrop(cropsize))
+        else:
+            transforms.append(CenterCrop(cropsize))
+
+        ## flip
+        transforms.append(RandomHorizontalFlip())
+
+        transforms.append(ToTensor())
+        transforms.append(Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]))
+        self.transforms = Compose(transforms)
+        return
+
+    def __getitem__(self, index):
+        if(self.dataset_size == self.A_size):
+            data_A = self.load_img(self.A[index], self.input_dim_A)
+            data_B = self.load_img(self.B[random.randint(0, self.B_size -1)], self.input_dim_B)
+
+        else:
+            data_A = self.load_img(self.A[random.randint(0, self.A_size -1)], self.input_dim_A)
+            data_B = self.load_img(self.B[index], self.input_dim_B)
+        return data_A, data_B#, torch.Tensor([1, 0])
+
+    def __len__(self):
+        return self.dataset_size
+
+    def load_img(self, img_name, input_dim):
+        img = Image.open(img_name).convert('RGB')
+        img = self.transforms(img)
+        if(input_dim == 1):
+            img = img[0, ...] * 0.299 + img[1, ...] * 0.587 + img[2, ...] * 0.114
+            img = img.unsqueeze(0)
+        return img
 
 
 class dataset_combine(data.Dataset):

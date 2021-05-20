@@ -1,10 +1,13 @@
 .vscode/
 __pycache__/
+taming_comb/__pycache__/
+.ipynb_checkpoints/
 
 # reconstructions
 res/
 
 # model
+b_switch*/
 a_model*/
 afhq*/
 both*/
