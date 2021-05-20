@@ -161,8 +161,8 @@ if __name__ == "__main__":
             {
                 'model_state_dict': model.state_dict(),
                 'opt_ae_state_dict': opt_ae.state_dict(),
-                'opt_disc_a_state_dict': opt_disc.state_dict(),
-                'opt_disc_b_state_dict': opt_disc.state_dict()
+                'opt_disc_a_state_dict': opt_disc_a.state_dict(),
+                'opt_disc_b_state_dict': opt_disc_b.state_dict()
             }, os.path.join(os.getcwd(), save_path, 'vqgan_latest.pt'))
 
 
@@ -171,8 +171,8 @@ if __name__ == "__main__":
                 {
                     'model_state_dict': model.state_dict(),
                     'opt_ae_state_dict': opt_ae.state_dict(),
-                    'opt_disc_a_state_dict': opt_disc.state_dict(),
-                    'opt_disc_b_state_dict': opt_disc.state_dict()
+                    'opt_disc_a_state_dict': opt_disc_a.state_dict(),
+                    'opt_disc_b_state_dict': opt_disc_b.state_dict()
                 }, os.path.join(os.getcwd(), save_path, 'vqgan_{}.pt'.format(epoch)))
             # torch.save(
             #     {
