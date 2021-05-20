@@ -40,7 +40,8 @@ class VQModel(nn.Module):
         self.encoder = Encoder(**ddconfig)
         self.decoder_a = Decoder(**ddconfig)
         self.decoder_b = Decoder(**ddconfig)
-        self.loss = instantiate_from_config(lossconfig)
+        self.loss_a = instantiate_from_config(lossconfig)
+        self.loss_b = instantiate_from_config(lossconfig)
         self.quantize = VectorQuantizer(n_embed, embed_dim, beta=0.25)
         self.quant_conv = torch.nn.Conv2d(ddconfig["z_channels"], embed_dim, 1)
         self.post_quant_conv = torch.nn.Conv2d(embed_dim, ddconfig["z_channels"], 1)
@@ -66,23 +67,14 @@ class VQModel(nn.Module):
         dec = self.decode(quant_b)
         return dec
 
-    def forward(self, input, label_a):
-        quant, diff, _ = self.encode(input)
+    def forward(self, input, label):
+        if(label == 1):
+            quant, diff, _ = self.encode(input)
+            dec = self.decode_a(quant)
+        else:
+            quant, diff, _ = self.encode(input)
+            dec = self.decode_b(quant)
 
-        label_b = torch.subtract( torch.ones_like(label_a), label_a)
-        valid_a = torch.nonzero(label_a)    # (NUM_NOT_ZEROS, 1)
-        valid_b = torch.nonzero(label_b)
-        quantized_a = torch.squeeze( quant[valid_a, :], 1)
-        quantized_b = torch.squeeze( quant[valid_b, :], 1)
-
-        x_recon_a = self.decode_a(quantized_a)
-        x_recon_b = self.decode_b(quantized_b)
-
-        dec = torch.zeros_like( torch.cat((x_recon_a, x_recon_b), 0))
-        dec[valid_a, :] = torch.unsqueeze( x_recon_a, 1)
-        dec[valid_b, :] = torch.unsqueeze( x_recon_b, 1)
-        
-        # dec = self.decode(quant)
         return dec, diff
 
     def get_input(self, batch, k=None):
@@ -92,12 +84,11 @@ class VQModel(nn.Module):
         x = x.permute(0, 3, 1, 2).to(memory_format=torch.contiguous_format)
         return x.float()
 
-    def get_last_layer(self):
-        # return torch.cat(
-        #     (self.decoder_a.conv_out.weight, self.decoder_b.conv_out.weight),
-        #     dim=0
-        # )
-        return self.decoder_a.conv_out.weight, self.decoder_b.conv_out.weight
+    def get_last_layer(self, label):
+        if(label ==  1):
+            return self.decoder_a.conv_out.weight
+        else:
+            return self.decoder_b.conv_out.weight
 
 
 '''

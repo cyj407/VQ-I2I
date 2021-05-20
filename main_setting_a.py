@@ -155,7 +155,7 @@ if __name__ == "__main__":
             }, os.path.join(os.getcwd(), save_path, 'vqgan_latest.pt'))
 
 
-        if(epoch % 10 == 0 and epoch >= 90):
+        if(epoch % 10 == 0 and epoch >= 50):
             torch.save(
                 {
                     'model_state_dict': model.state_dict(),

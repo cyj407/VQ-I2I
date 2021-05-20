@@ -60,25 +60,22 @@ class VQLPIPSWithDiscriminator(nn.Module):
         self.discriminator_weight = disc_weight
         self.disc_conditional = disc_conditional
 
-    def calculate_adaptive_weight(self, nll_loss, g_loss, num_of_b, last_layer=None):
+    def calculate_adaptive_weight(self, nll_loss, g_loss, last_layer=None):
         if last_layer is not None:
-            nll_grads_a = torch.autograd.grad(nll_loss, last_layer[0], retain_graph=True)[0]
-            nll_grads_b = torch.autograd.grad(nll_loss, last_layer[1], retain_graph=True)[0]
-            g_grads_a = torch.autograd.grad(g_loss, last_layer[0], retain_graph=True)[0]
-            g_grads_b = torch.autograd.grad(g_loss, last_layer[1], retain_graph=True)[0]
-            # nll_grads = torch.autograd.grad(nll_loss, last_layer, retain_graph=True)[0]
-            # g_grads = torch.autograd.grad(g_loss, last_layer, retain_graph=True)[0]
-            # print(nll_grads.shape)
+            # nll_grads_a = torch.autograd.grad(nll_loss, last_layer[0], retain_graph=True)[0]
+            # nll_grads_b = torch.autograd.grad(nll_loss, last_layer[1], retain_graph=True)[0]
+            # g_grads_a = torch.autograd.grad(g_loss, last_layer[0], retain_graph=True)[0]
+            # g_grads_b = torch.autograd.grad(g_loss, last_layer[1], retain_graph=True)[0]
+            nll_grads = torch.autograd.grad(nll_loss, last_layer, retain_graph=True)[0]
+            g_grads = torch.autograd.grad(g_loss, last_layer, retain_graph=True)[0]
         else:
             nll_grads = torch.autograd.grad(nll_loss, self.last_layer[0], retain_graph=True)[0]
             g_grads = torch.autograd.grad(g_loss, self.last_layer[0], retain_graph=True)[0]
 
-        # d_weight = torch.norm(nll_grads) / (torch.norm(g_grads) + 1e-4)
-        d_weight_a = torch.norm(nll_grads_a) / (torch.norm(g_grads_a) + 1e-4)
-        d_weight_b = torch.norm(nll_grads_a) / (torch.norm(g_grads_b) + 1e-4)
-        # print(d_weight_a)
-        # print(d_weight_b)
-        d_weight = (d_weight_a * (3-num_of_b) + d_weight_b * num_of_b) / 3.0
+        d_weight = torch.norm(nll_grads) / (torch.norm(g_grads) + 1e-4)
+        # d_weight_a = torch.norm(nll_grads_a) / (torch.norm(g_grads_a) + 1e-4)
+        # d_weight_b = torch.norm(nll_grads_a) / (torch.norm(g_grads_b) + 1e-4)
+        # d_weight = (d_weight_a * (3-num_of_b) + d_weight_b * num_of_b) / 3.0
         # d_weight_a = torch.clamp(d_weight_a, 0.0, 1e4).detach()
         # d_weight_a = d_weight_a * self.discriminator_weight
         # d_weight_b = torch.clamp(d_weight_b, 0.0, 1e4).detach()
@@ -112,15 +109,15 @@ class VQLPIPSWithDiscriminator(nn.Module):
                 logits_fake = self.discriminator(torch.cat((reconstructions.contiguous(), cond), dim=1))
             g_loss = -torch.mean(logits_fake)
 
-            # try:
+            try:
             # num_of_b = last_layer[1]
             # last_layer = last_layer[0]
-            # d_weight = self.calculate_adaptive_weight(nll_loss, g_loss, num_of_b, last_layer=last_layer)
-            # except RuntimeError:
-            #     assert not self.training
-            #     d_weight = torch.tensor(0.0)
+                d_weight = self.calculate_adaptive_weight(nll_loss, g_loss, last_layer=last_layer)
+            except RuntimeError:
+                assert not self.training
+                d_weight = torch.tensor(0.0)
             # print(d_weight)
-            d_weight = torch.tensor(1.0)
+            # d_weight = torch.tensor(1.0)
 
 
             disc_factor = adopt_weight(self.disc_factor, global_step, threshold=self.discriminator_iter_start)

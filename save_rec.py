@@ -60,7 +60,7 @@ def load_eval_model(_path, config_file, ed, ne):
     # a_path = os.path.join(os.getcwd(), 'a_model_w_3e-1', 'vqgan_880.pt')
     # model_a = torch.load(a_path, map_location=device)
     from omegaconf import OmegaConf
-    from main import get_obj_from_str, instantiate_from_config
+    from main_setting_a import get_obj_from_str, instantiate_from_config
     config = OmegaConf.load(config_file)
     # print(config.model.params.n_embed)
     config.model.params.n_embed = ne
@@ -79,16 +79,16 @@ def save_tensor(im_data, image_dir, image_name):
     save_image(im, save_path)
 
 
-device = torch.device('cuda:2')
+device = torch.device('cuda:0')
 
 
 if __name__ == "__main__":
 
     # dataloader
-    root = '/eva_data/yujie/datasets/cat2dog'
-    # root = '/eva_data/yujie/datasets/afhq'
+    # root = '/eva_data/yujie/datasets/cat2dog'
+    root = '/eva_data/yujie/datasets/afhq'
     
-    _class = 'A'
+    _class = 'B'
     model_name = 'afhq{}_'.format(_class)
     epoch = 50
     mode = 'test'   # or 'train'
@@ -99,7 +99,7 @@ if __name__ == "__main__":
     validation_data = dataset_single(root, mode, _class, 256, 256)
     # else:
         # validation_data = dataset_single(root, mode, 'B', 256, 256)
-    '''
+    
 
     # m_inorm_path = os.path.join(os.getcwd(), 'cat_d_1_1e-1_512_512', 'vqgan_1100.pt')
     # m_inorm_path2 = os.path.join(os.getcwd(), 'cat_d_1_1e-1_512_512', 'vqgan_300.pt')
@@ -108,11 +108,15 @@ if __name__ == "__main__":
     # m_inorm = load_eval_model(m_inorm_path, 'config_cat2dog.yaml')
     # m_lnorm = load_eval_model(m_lnorm_path, 'config_ln.yaml')
     # doc = ['512_512', '512_256', '512_128', '256_512', '256_256', '256_128']
-    doc = ['256_64', '256_128', '256_256', '256_512']
-    # _d = '512_128'
+    # doc = ['256_64', '256_128', '256_256', '256_512']
+    _d = '256_256'
+
+    epochs = [i for i in range(90, 120, 10)]
+
+
     model_list = []
-    for _d in doc:
-    # for epoch in range(400, 500, 100):
+    # for _d in doc:
+    for epoch in epochs:
         ed, ne = _d.split('_')
         ed, ne = int(ed), int(ne)
         # _name = _class + _d
@@ -126,25 +130,22 @@ if __name__ == "__main__":
 
     ############################
     
-    # org_path = '/home/chenyujie/vqvaecut2/vqgan_model/VQGAN_df03_cat_new.pt'
-    # model_a = torch.load(org_path, map_location=device)
-    # model_a.load_state_dict(ck['model_state_dict'], strict=False)
-    # model_a = model_a.to(device)
-    # model_a.eval()
     if(not os.path.isdir('res')):
         os.mkdir('res')
+
     '''
     if(not os.path.isdir(os.path.join(os.getcwd(), 'res', 'originals'))):
         os.mkdir(os.path.join(os.getcwd(), 'res', 'originals'))
     '''
-    # epochs = [i for i in range(400, 500, 100)]
-    # for epoch, _m in zip(epochs, model_list):
-    for _d, _m in zip(doc, model_list):
-        save_dir = '{}{}_{}_{}'.format(model_name, mode, _class, _d, epoch)
+
+    for epoch, _m in zip(epochs, model_list):
+    # for _d, _m in zip(doc, model_list):
+        save_dir = '{}{}_{}_{}_{}'.format(model_name, mode, _class, _d, epoch)
         print(save_dir)
         if(not os.path.isdir(os.path.join(os.getcwd(), 'res', save_dir))):
             os.mkdir(os.path.join(os.getcwd(), 'res', save_dir))
-    '''
+
+    
     # data loader
     test_loader = DataLoader(validation_data, batch_size=1, shuffle=False, pin_memory=True)
     
@@ -152,21 +153,21 @@ if __name__ == "__main__":
         # print(data.shape)   # (1, 3, 256, 256)
 
         data = data.to(device)
-        '''
-        # for epoch, _m in zip(epochs, model_list):
+        
+        for epoch, _m in zip(epochs, model_list):
         # for _m in model_list:
-        for _d, _m in zip(doc, model_list):
+        # for _d, _m in zip(doc, model_list):
             _, xrec_in = code_histogram(data, _m)
             # _, xrec_in = code_histogram(data, m_inorm)
             # _, xrec_in2 = code_histogram(data, m_inorm2)
             # _, xrec_org = code_histogram(data, model_a)
-            save_dir = '{}{}_{}_{}'.format(model_name, mode, _class, _d, epoch)
+            save_dir = '{}{}_{}_{}_{}'.format(model_name, mode, _class, _d, epoch)
                 
                 # save_dir = 'setB_trans_{}_{}_{}_{}'.format(mode, _class, _d, epoch)
                 # print(save_dir)
             save_tensor(xrec_in, save_dir, i)
-        '''
-        save_tensor(data, 'originals', i)
+        
+        # save_tensor(data, 'originals', i)
         # save_tensor(xrec_in, 'cat_1100', i)
         # save_tensor(xrec_in2, 'cat_300', i)
         # save_tensor(xrec_org, 'cat_original', i)
