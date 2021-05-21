@@ -183,49 +183,18 @@ class VQModelCrossGAN(VQModel):
         super(VQModelCrossGAN, self).__init__(
             ddconfig, lossconfig, n_embed, embed_dim
         )
-        self.a2b_disc = NLayerDiscriminator()
-        self.b2a_disc = NLayerDiscriminator()
 
-    # def forward(self, input, label_a):
-    def forward(self, input_a, input_b):
-        # return super().forward(input, label_a)
-        quantized_a, diff, _ = self.encode(input_a)
-        quantized_b, diff, _ = self.encode(input_b)
+    def forward(self, input, label):
+        quant, diff, _ = self.encode(input)
 
-        x_recon_a = self.decode_a(quantized_a)
-        x_recon_b = self.decode_b(quantized_b)
-
-        dec = torch.zeros_like( torch.cat((x_recon_a, x_recon_b), 0))
-        # dec[valid_a, :] = torch.unsqueeze( x_recon_a, 1)
-        # dec[valid_b, :] = torch.unsqueeze( x_recon_b, 1)
+        if(label == 1):
+            rec = self.decode_a(quant)
+            fake = self.decode_b(quant)
+        else:
+            rec = self.decode_b(quant)
+            fake = self.decode_a(quant)
         
-        # dec = self.decode(quant)
-        return dec, diff
-
-    def compute_disc_loss(self, input_a, input_b, disc_weight=0.8):
-
-        quantized_a, _, _ = self.encode(input_a)
-        quantized_b, _, _ = self.encode(input_b)
-
-        # switch decoder
-        fake_a = self.decode_a(quantized_b)
-        fake_b = self.decode_b(quantized_a)
-
-        ## compute a2b GAN loss
-        # hinge loss (real: b_input, fake: a_in_b_out)
-        logits_real_b = self.a2b_disc(input_b.contiguous().detach())
-        logits_fake_b = self.a2b_disc(fake_b.contiguous().detach())
-
-        a2b_loss = disc_weight * hinge_d_loss(logits_real_b, logits_fake_b)
-
-        ## compute b2a GAN loss
-        # hinge loss (real: a_input, fake: b_in_a_out)
-        logits_real_a = self.b2a_disc(input_a.contiguous().detach())
-        logits_fake_a = self.b2a_disc(fake_a.contiguous().detach())
-
-        b2a_loss = disc_weight * hinge_d_loss(logits_real_a, logits_fake_a)
-
-        return a2b_loss, b2a_loss
+        return rec, fake, diff
 
 
 import pytorch_lightning as pl

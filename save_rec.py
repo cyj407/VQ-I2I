@@ -111,7 +111,7 @@ if __name__ == "__main__":
     # doc = ['256_64', '256_128', '256_256', '256_512']
     _d = '256_256'
 
-    epochs = [i for i in range(90, 120, 10)]
+    epochs = [i for i in range(50, 60, 10)]
 
 
     model_list = []

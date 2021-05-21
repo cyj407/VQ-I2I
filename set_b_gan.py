@@ -6,11 +6,10 @@ import torch
 import torchvision
 from torch.utils.data import random_split, DataLoader, Dataset
 import torch.nn.functional as F
-from dataset import dataset_unpair
+from dataset import dataset_combine, dataset_unpair
 from torch.utils.data import DataLoader
 import os
-import taming_comb
-# from taming_comb.models.vqgan import VQModel, VQModelCrossGAN
+
 
 
 def get_obj_from_str(string, reload=False):
@@ -31,26 +30,25 @@ def instantiate_from_config(config):
 
 if __name__ == "__main__":
 
-    
     # ONLY MODIFY SETTING HERE
-    device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     batch_size = 1
-    learning_rate = 1e-4
+    learning_rate = 4.5e-6
     ne = 64
-    ed = 256
+    ed = 512
     epoch_start = 1
-    epoch_end = 100
+    epoch_end = 300
+    save_path = 'both_{}_{}_switch_test'.format(ed, ne)    # model dir
     root = '/eva_data/yujie/datasets/cat2dog'
-    save_path = 'b_switch_{}_{}'.format(ed, ne)
 
     # load data
     train_data = dataset_unpair(root, 'train', 286, 256)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True)
 
-    # model
+
     f = os.path.join(os.getcwd(), save_path, 'vqgan_latest.pt')
     config = OmegaConf.load('config_comb.yaml')
-    config.model.target = "taming_comb.models.vqgan.VQModelCrossGAN"
+    config.model.target = 'taming_comb.models.vqgan.VQModelCrossGAN'
     config.model.base_learning_rate = learning_rate
     config.model.params.embed_dim = ed
     config.model.params.n_embed = ne
@@ -61,6 +59,8 @@ if __name__ == "__main__":
         model.load_state_dict(ck['model_state_dict'], strict=False)
     model.to(device)
     model.train()
+
+    # print(model.loss.discriminator)
     
     opt_ae = torch.optim.Adam(list(model.encoder.parameters())+
                                 list(model.decoder_a.parameters())+
@@ -69,89 +69,104 @@ if __name__ == "__main__":
                                 list(model.quant_conv.parameters())+
                                 list(model.post_quant_conv.parameters()),
                                 lr=learning_rate, betas=(0.5, 0.9))
-    opt_disc = torch.optim.Adam(model.loss.discriminator.parameters(), lr=learning_rate, betas=(0.5, 0.9))
-    opt_a2b_disc = torch.optim.Adam(model.a2b_disc.parameters(), lr=learning_rate, betas=(0.5, 0.9))
-    opt_b2a_disc = torch.optim.Adam(model.b2a_disc.parameters(), lr=learning_rate, betas=(0.5, 0.9))
-
+    opt_disc_a = torch.optim.Adam(model.loss_a.discriminator.parameters(),
+                                lr=learning_rate, betas=(0.5, 0.9))
+    opt_disc_b = torch.optim.Adam(model.loss_b.discriminator.parameters(),
+                                lr=learning_rate, betas=(0.5, 0.9))
 
     if(os.path.isfile(f)):
         print('load ' + f)
         opt_ae.load_state_dict(ck['opt_ae_state_dict'])
-        opt_disc.load_state_dict(ck['opt_dic_state_dict'])
-        opt_a2b_disc.load_state_dict(ck['opt_a2b_dic_state_dict'])
-        opt_b2a_disc.load_state_dict(ck['opt_b2a_dic_state_dict'])
-  
-    train_res_ae_error = []
-    train_res_disc_error = []
-    train_res_rec_error = []
-    train_a2b_disc_error = []
-    train_b2a_disc_error = []
+        opt_disc_a.load_state_dict(ck['opt_disc_a_state_dict'])
+        opt_disc_b.load_state_dict(ck['opt_disc_b_state_dict'])
 
-    iterations = len(train_data) // batch_size
-    iterations = iterations + 1 if len(train_data) % batch_size != 0 else iterations
 
     if(not os.path.isdir(save_path)):
         os.mkdir(save_path)
 
+    train_ae_a_error = []
+    train_ae_b_error = []
+    train_disc_a_error = []
+    train_disc_b_error = []
+    train_disc_a2b_error = []
+    train_disc_b2a_error = []
+    train_res_rec_error = []
 
+    iterations = len(train_data) // batch_size
+    iterations = iterations + 1 if len(train_data) % batch_size != 0 else iterations
     for epoch in range(epoch_start, epoch_end+1):
         for i in range(iterations):
 
             dataA, dataB = next(iter(train_loader))
             dataA, dataB = dataA.to(device), dataB.to(device)
-            data = torch.cat((dataA, dataB), 0).to(device)
-            label = torch.Tensor([1] * batch_size + [0] * batch_size).to(device)
 
 
-            # print(label)
-            ### ???
-            # data = model.get_input(data)
-            # xrec, qloss = model(data, label)
-            xrec, qloss = model(dataA, dataB)
-            
-            ## Generator
+            ## Generator A
+            recA, fakeB, qlossA = model(dataA, label=1)
             opt_ae.zero_grad()
 
-            # num_of_b = torch.count_nonzero(label).item()
-            # print(num_of_b)
-
-            aeloss, _ = model.loss(qloss, data, xrec, optimizer_idx=0, global_step=epoch,
-                                    last_layer=model.get_last_layer(), split="train")
-            aeloss.backward()
+            aeloss_a, _ = model.loss_a(qlossA, dataA, recA, optimizer_idx=0, global_step=epoch,
+                                    last_layer=model.get_last_layer(label=1), split="train")
+            aeloss_a.backward()
             opt_ae.step()
 
-            ## Discriminator
-            opt_disc.zero_grad()
-            discloss, log = model.loss(qloss, data, xrec, optimizer_idx=1, global_step=epoch,
-                                    last_layer=model.get_last_layer(), split="train")
 
-            ## CROSS Discriminator
-            opt_a2b_disc.zero_grad()
-            opt_b2a_disc.zero_grad()
+            ## Generator B
+            recB, fakeA, qlossB = model(dataB, label=0)
+            opt_ae.zero_grad()
 
-            a2b_loss, b2a_loss = model.compute_disc_loss(dataA, dataB)
+            aeloss_b, _ = model.loss_b(qlossB, dataB, recB, optimizer_idx=0, global_step=epoch,
+                                    last_layer=model.get_last_layer(label=0), split="train")
+            aeloss_b.backward()
+            opt_ae.step()
+
+
+            ## Discriminator A
+            opt_disc_a.zero_grad()
+            discloss_a, log = model.loss_a(qlossA, dataA, recA, optimizer_idx=1, global_step=epoch,
+                                    last_layer=model.get_last_layer(label=1), split="train")
             
+            b2a_loss, log = model.loss_a(_, dataA, fakeA, optimizer_idx=1, global_step=epoch,
+                                    last_layer=None, split="train")
+            
+            disc_a_loss = discloss_a + b2a_loss
+            disc_a_loss.backward()
+            opt_disc_a.step()
+
+
+            ## Discriminator B
+            opt_disc_b.zero_grad()
+            discloss_b, log = model.loss_b(qlossB, dataB, recB, optimizer_idx=1, global_step=epoch,
+                                    last_layer=model.get_last_layer(label=0), split="train")
+            a2b_loss, log = model.loss_b(_, dataB, fakeB, optimizer_idx=1, global_step=epoch,
+                                    last_layer=None, split="train")
+            
+            disc_b_loss = discloss_b + a2b_loss
             a2b_loss.backward()
-            opt_a2b_disc.step()
+            opt_disc_b.step()
+            
 
-            b2a_loss.backward()
-            opt_b2a_disc.step()
+            # compute mse loss b/w input and reconstruction
+            data = torch.cat((dataA, dataB), 0).to(device)
+            rec = torch.cat((recA, recB), 0).to(device)
+            recon_error = F.mse_loss( data, rec)
 
-
-            recon_error = F.mse_loss(data, xrec)
             train_res_rec_error.append(recon_error.item())
-            train_res_ae_error.append(aeloss.item())
-            train_res_disc_error.append(discloss.item())
-            train_a2b_disc_error.append(a2b_loss.item())
-            train_b2a_disc_error.append(b2a_loss.item())
-
+            train_ae_a_error.append(aeloss_a.item())
+            train_ae_b_error.append(aeloss_b.item())
+            train_disc_a_error.append(discloss_a.item())
+            train_disc_b_error.append(discloss_b.item())
+            train_disc_a2b_error.append(a2b_loss.item())
+            train_disc_b2a_error.append(b2a_loss.item())
 
             if (i+1) % 100 == 0:
-                _rec = 'epoch {}, {} iterations\n'.format(epoch, i+1)
-                _rec += 'ae_loss: {:8f}, disc_loss: {:8f}\n'.format(
-                    np.mean(train_res_ae_error[-100:]), np.mean(train_res_disc_error[-100:]))
-                _rec += 'a2b_loss: {:8f}, b2a_loss: {:8f}\n'.format(
-                    np.mean(train_a2b_disc_error[-100:]), np.mean(train_b2a_disc_error[-100:]))
+                _rec  = 'epoch {}, {} iterations\n'.format(epoch, i+1)
+                _rec += '(A domain) ae_loss: {:8f}, disc_loss: {:8f}\n'.format(
+                            np.mean(train_ae_a_error[-100:]), np.mean(train_disc_a_error[-100:]))
+                _rec += '(B domain) ae_loss: {:8f}, disc_loss: {:8f}\n'.format(
+                            np.mean(train_ae_b_error[-100:]), np.mean(train_disc_b_error[-100:]))
+                _rec += 'A vs A2B loss: {:8f}, B vs B2A loss: {:8f}\n'.format(
+                            np.mean(train_disc_a2b_error[-100:]), np.mean(train_disc_b2a_error[-100:]))
                 _rec += 'recon_error: {:8f}\n\n'.format(
                     np.mean(train_res_rec_error[-100:]))
                 # print(_rec)
@@ -163,28 +178,24 @@ if __name__ == "__main__":
             {
                 'model_state_dict': model.state_dict(),
                 'opt_ae_state_dict': opt_ae.state_dict(),
-                'opt_dic_state_dict': opt_disc.state_dict(),
-                'opt_a2b_dic_state_dict': opt_a2b_disc.state_dict(),
-                'opt_b2a_dic_state_dict': opt_b2a_disc.state_dict()
+                'opt_disc_a_state_dict': opt_disc_a.state_dict(),
+                'opt_disc_b_state_dict': opt_disc_b.state_dict()
             }, os.path.join(os.getcwd(), save_path, 'vqgan_latest.pt'))
 
 
-        if(epoch % 10 == 0 and epoch >= 50):
+        if(epoch % 50 == 0 and epoch >= 50):
             torch.save(
                 {
                     'model_state_dict': model.state_dict(),
                     'opt_ae_state_dict': opt_ae.state_dict(),
-                    'opt_dic_state_dict': opt_disc.state_dict(),                        
-                    'opt_a2b_dic_state_dict': opt_a2b_disc.state_dict(),
-                    'opt_b2a_dic_state_dict': opt_b2a_disc.state_dict()
+                    'opt_disc_a_state_dict': opt_disc_a.state_dict(),
+                    'opt_disc_b_state_dict': opt_disc_b.state_dict()
                 }, os.path.join(os.getcwd(), save_path, 'vqgan_{}.pt'.format(epoch)))
             # torch.save(
             #     {
             #         'model_state_dict': model.state_dict(),
             #         'opt_ae_state_dict': opt_ae.state_dict(),
-            #         'opt_dic_state_dict': opt_disc.state_dict(),    
-            #         'opt_a2b_dic_state_dict': opt_a2b_disc.state_dict(),
-            #         'opt_b2a_dic_state_dict': opt_b2a_disc.state_dict()
+            #         'opt_disc_a_state_dict': opt_disc_a.state_dict(),
+            #         'opt_disc_b_state_dict': opt_disc_b.state_dict()
             #     }, os.path.join(os.getcwd(), save_path, 'vqgan_latest.pt'))
 
-    
