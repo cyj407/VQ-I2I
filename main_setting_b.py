@@ -31,15 +31,15 @@ def instantiate_from_config(config):
 if __name__ == "__main__":
 
     # ONLY MODIFY SETTING HERE
-    device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
-    batch_size = 3
-    learning_rate = 4.5e-6
-    ne = 64
-    ed = 512
+    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    batch_size = 1
+    learning_rate = 1e-4
+    ne = 256
+    ed = 256
     epoch_start = 1
-    epoch_end = 300
-    save_path = 'both_{}_{}_sep_upd'.format(ed, ne)    # model dir
-    root = '/eva_data/yujie/datasets/cat2dog'
+    epoch_end = 50
+    save_path = 'both_afhq_{}_{}_sep_upd'.format(ed, ne)    # model dir
+    root = '/eva_data/yujie/datasets/afhq'
 
     # load data
     train_data = dataset_unpair(root, 'train', 286, 256)
@@ -107,14 +107,6 @@ if __name__ == "__main__":
             aeloss_a.backward()
             opt_ae.step()
 
-            ## Discriminator A
-            opt_disc_a.zero_grad()
-            discloss_a, log = model.loss_a(qlossA, dataA, recA, optimizer_idx=1, global_step=epoch,
-                                    last_layer=model.get_last_layer(label=1), split="train")
-            
-            discloss_a.backward()
-            opt_disc_a.step()
-
             ## Generator B
             recB, qlossB = model(dataB, label=0)
             opt_ae.zero_grad()
@@ -123,6 +115,14 @@ if __name__ == "__main__":
                                     last_layer=model.get_last_layer(label=0), split="train")
             aeloss_b.backward()
             opt_ae.step()
+
+            ## Discriminator A
+            opt_disc_a.zero_grad()
+            discloss_a, log = model.loss_a(qlossA, dataA, recA, optimizer_idx=1, global_step=epoch,
+                                    last_layer=model.get_last_layer(label=1), split="train")
+            
+            discloss_a.backward()
+            opt_disc_a.step()
 
             ## Discriminator B
             opt_disc_b.zero_grad()

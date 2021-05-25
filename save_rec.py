@@ -4,7 +4,7 @@ import torch
 import numpy as np
 from PIL import Image
 import os
-from dataset import dataset_single
+from dataset import dataset_single, dataset_unpair
 from torch.utils.data import DataLoader
 
 
@@ -51,7 +51,8 @@ def save_image(image_numpy, image_path, aspect_ratio=1.0):
 def code_histogram(validation_originals, model):
     ze_a = model.quant_conv( model.encoder(validation_originals))   # (1, 256, 16, 16)
     zq_a, _, (_, _, enc_a_indice) = model.quantize(ze_a)
-    xrec = model.decode(zq_a)
+    # xrec = model.decode(zq_a)
+    xrec = model.decode_a(zq_a)
     
     return enc_a_indice.cpu().numpy(), xrec#, histo.cpu().numpy()
 
@@ -63,6 +64,7 @@ def load_eval_model(_path, config_file, ed, ne):
     from main_setting_a import get_obj_from_str, instantiate_from_config
     config = OmegaConf.load(config_file)
     # print(config.model.params.n_embed)
+
     config.model.params.n_embed = ne
     config.model.params.embed_dim = ed
     model_a = instantiate_from_config(config.model)
@@ -89,16 +91,18 @@ if __name__ == "__main__":
     root = '/eva_data/yujie/datasets/afhq'
     
     _class = 'B'
-    model_name = 'afhq{}_'.format(_class)
-    epoch = 50
+    # model_name = 'both_afhq{}_'.format(_class)
+    model_name = 'both_afhq_'#.format(_class)
+    epoch = 'latest'
     mode = 'test'   # or 'train'
-    config = 'config_cat2dog.yaml'
+    config = 'config_comb.yaml'
     
     # if(_class == 'cat'):        
         # train_data = dataset_single(root, 'train', 'A')
+    # if(_class == 'both'):
     validation_data = dataset_single(root, mode, _class, 256, 256)
     # else:
-        # validation_data = dataset_single(root, mode, 'B', 256, 256)
+        # validation_data = dataset_unpair(root, mode, 286, 256)
     
 
     # m_inorm_path = os.path.join(os.getcwd(), 'cat_d_1_1e-1_512_512', 'vqgan_1100.pt')
@@ -109,18 +113,18 @@ if __name__ == "__main__":
     # m_lnorm = load_eval_model(m_lnorm_path, 'config_ln.yaml')
     # doc = ['512_512', '512_256', '512_128', '256_512', '256_256', '256_128']
     # doc = ['256_64', '256_128', '256_256', '256_512']
-    _d = '256_256'
+    doc = ['256_256']
 
-    epochs = [i for i in range(50, 60, 10)]
+    # epochs = [i for i in range(50, 60, 10)]
 
 
     model_list = []
-    # for _d in doc:
-    for epoch in epochs:
+    for _d in doc:
+    # for epoch in epochs:
         ed, ne = _d.split('_')
         ed, ne = int(ed), int(ne)
         # _name = _class + _d
-        _name = model_name + _d
+        _name = model_name + _d + '_sep_upd'
 
         m_inorm_path = os.path.join(os.getcwd(), _name, 'vqgan_{}.pt'.format(epoch))
         m_inorm = load_eval_model(m_inorm_path, config, ed, ne)
@@ -138,9 +142,9 @@ if __name__ == "__main__":
         os.mkdir(os.path.join(os.getcwd(), 'res', 'originals'))
     '''
 
-    for epoch, _m in zip(epochs, model_list):
-    # for _d, _m in zip(doc, model_list):
-        save_dir = '{}{}_{}_{}_{}'.format(model_name, mode, _class, _d, epoch)
+    # for epoch, _m in zip(epochs, model_list):
+    for _d, _m in zip(doc, model_list):
+        save_dir = '{}{}_{}_{}_{}_b2a_sep'.format(model_name, mode, _class, _d, epoch)
         print(save_dir)
         if(not os.path.isdir(os.path.join(os.getcwd(), 'res', save_dir))):
             os.mkdir(os.path.join(os.getcwd(), 'res', save_dir))
@@ -154,14 +158,14 @@ if __name__ == "__main__":
 
         data = data.to(device)
         
-        for epoch, _m in zip(epochs, model_list):
+        # for epoch, _m in zip(epochs, model_list):
         # for _m in model_list:
-        # for _d, _m in zip(doc, model_list):
+        for _d, _m in zip(doc, model_list):
             _, xrec_in = code_histogram(data, _m)
             # _, xrec_in = code_histogram(data, m_inorm)
             # _, xrec_in2 = code_histogram(data, m_inorm2)
             # _, xrec_org = code_histogram(data, model_a)
-            save_dir = '{}{}_{}_{}_{}'.format(model_name, mode, _class, _d, epoch)
+            save_dir = '{}{}_{}_{}_{}_b2a_sep'.format(model_name, mode, _class, _d, epoch)
                 
                 # save_dir = 'setB_trans_{}_{}_{}_{}'.format(mode, _class, _d, epoch)
                 # print(save_dir)

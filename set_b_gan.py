@@ -31,15 +31,16 @@ def instantiate_from_config(config):
 if __name__ == "__main__":
 
     # ONLY MODIFY SETTING HERE
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     batch_size = 1
-    learning_rate = 4.5e-6
-    ne = 64
-    ed = 512
+    learning_rate = 1e-4
+    ne = 256
+    ed = 256
     epoch_start = 1
-    epoch_end = 300
-    save_path = 'both_{}_{}_switch_test'.format(ed, ne)    # model dir
-    root = '/eva_data/yujie/datasets/cat2dog'
+    epoch_end = 50
+    save_path = 'both_afhq_{}_{}_switch_upd'.format(ed, ne)    # model dir
+    print(save_path)
+    root = '/eva_data/yujie/datasets/afhq'
 
     # load data
     train_data = dataset_unpair(root, 'train', 286, 256)
@@ -129,6 +130,7 @@ if __name__ == "__main__":
             b2a_loss, log = model.loss_a(_, dataA, fakeA, optimizer_idx=1, global_step=epoch,
                                     last_layer=None, split="train")
             
+            # disc_a_loss = b2a_loss
             disc_a_loss = discloss_a + b2a_loss
             disc_a_loss.backward()
             opt_disc_a.step()
@@ -141,8 +143,9 @@ if __name__ == "__main__":
             a2b_loss, log = model.loss_b(_, dataB, fakeB, optimizer_idx=1, global_step=epoch,
                                     last_layer=None, split="train")
             
+            # disc_b_loss = a2b_loss
             disc_b_loss = discloss_b + a2b_loss
-            a2b_loss.backward()
+            disc_b_loss.backward()
             opt_disc_b.step()
             
 
@@ -183,7 +186,7 @@ if __name__ == "__main__":
             }, os.path.join(os.getcwd(), save_path, 'vqgan_latest.pt'))
 
 
-        if(epoch % 50 == 0 and epoch >= 50):
+        if(epoch % 5 == 0 and epoch >= 20):
             torch.save(
                 {
                     'model_state_dict': model.state_dict(),
