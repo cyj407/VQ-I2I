@@ -31,14 +31,15 @@ def instantiate_from_config(config):
 if __name__ == "__main__":
 
     # ONLY MODIFY SETTING HERE
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
     batch_size = 1
     learning_rate = 1e-4
-    ne = 256
+    ne = 512  # Enlarge
     ed = 256
     epoch_start = 1
     epoch_end = 50
-    save_path = 'both_afhq_{}_{}_switch_upd'.format(ed, ne)    # model dir
+    switch_weight = 0.0 # self-reconstruction : a2b/b2a = 10 : 1
+    save_path = 'both_afhq_{}_{}_rec_only'.format(ed, ne)    # model dir
     print(save_path)
     root = '/eva_data/yujie/datasets/afhq'
 
@@ -131,7 +132,7 @@ if __name__ == "__main__":
                                     last_layer=None, split="train")
             
             # disc_a_loss = b2a_loss
-            disc_a_loss = discloss_a + b2a_loss
+            disc_a_loss = discloss_a + switch_weight * b2a_loss
             disc_a_loss.backward()
             opt_disc_a.step()
 
@@ -144,7 +145,7 @@ if __name__ == "__main__":
                                     last_layer=None, split="train")
             
             # disc_b_loss = a2b_loss
-            disc_b_loss = discloss_b + a2b_loss
+            disc_b_loss = discloss_b + switch_weight * a2b_loss
             disc_b_loss.backward()
             opt_disc_b.step()
             
@@ -176,7 +177,7 @@ if __name__ == "__main__":
                 with open(os.path.join(os.getcwd(), save_path, 'loss.txt'), 'a') as f:
                     f.write(_rec)
                     f.close()
-
+            
         torch.save(
             {
                 'model_state_dict': model.state_dict(),
@@ -186,7 +187,7 @@ if __name__ == "__main__":
             }, os.path.join(os.getcwd(), save_path, 'vqgan_latest.pt'))
 
 
-        if(epoch % 5 == 0 and epoch >= 20):
+        if(epoch % 5 == 0 and epoch >= 0):
             torch.save(
                 {
                     'model_state_dict': model.state_dict(),
