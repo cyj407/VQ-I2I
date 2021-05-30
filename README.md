@@ -6,6 +6,8 @@ python main_setting_b.py
 ```
 - ONLY NEED TO MODIFY THE HYPERPARAMETER SETTING IN `main_setting_b.py`
 ### Log
+- ==New== `set_b_gan.py` is available to setting the ratio between self-reconstruction and a2b/b2a now.
+    - `main_setting_b.py` is not maintaining now.
 - Use `dataset_combine` to load the dataset
     - **Class A label as 1, Class B label as 0**
     - Resize to 286 first, and crop to 256
