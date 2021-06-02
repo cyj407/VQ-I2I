@@ -86,7 +86,7 @@ class VQLPIPSWithDiscriminator(nn.Module):
         return d_weight
 
     def forward(self, codebook_loss, inputs, reconstructions, optimizer_idx,
-                global_step, last_layer=None, cond=None, split="train"):
+                global_step, last_layer=None, cond=None, split="train", fake=None, switch_weight=0.1):
         rec_loss = torch.abs(inputs.contiguous() - reconstructions.contiguous())
         if self.perceptual_weight > 0:
             p_loss = self.perceptual_loss(inputs.contiguous(), reconstructions.contiguous())
@@ -102,33 +102,40 @@ class VQLPIPSWithDiscriminator(nn.Module):
         if optimizer_idx == 0:
             # generator update
             if cond is None:
-                assert not self.disc_conditional
-                logits_fake = self.discriminator(reconstructions.contiguous())
+                assert not self.disc_conditional                
+                if(fake is None):   # original setting
+                    logits_fake = self.discriminator(reconstructions.contiguous())
+                else:
+                    # print('fake translation')
+                    logits_fake = self.discriminator(fake.contiguous())
             else:
                 assert self.disc_conditional
-                logits_fake = self.discriminator(torch.cat((reconstructions.contiguous(), cond), dim=1))
+                if(fake is None):
+                    logits_fake = self.discriminator(torch.cat((reconstructions.contiguous(), cond), dim=1))
+                else:
+                    logits_fake = self.discriminator(torch.cat((fake.contiguous(), cond), dim=1))
+
             g_loss = -torch.mean(logits_fake)
 
-            try:
-            # num_of_b = last_layer[1]
-            # last_layer = last_layer[0]
-                d_weight = self.calculate_adaptive_weight(nll_loss, g_loss, last_layer=last_layer)
-            except RuntimeError:
-                assert not self.training
-                d_weight = torch.tensor(0.0)
-            # print(d_weight)
+            # try:
+            #     d_weight = self.calculate_adaptive_weight(nll_loss, g_loss, last_layer=last_layer)
+            # except RuntimeError:
+            #     assert not self.training
+            #     d_weight = torch.tensor(0.0)
+
             # d_weight = torch.tensor(1.0)
 
 
             disc_factor = adopt_weight(self.disc_factor, global_step, threshold=self.discriminator_iter_start)
-            loss = nll_loss + d_weight * disc_factor * g_loss + self.codebook_weight * codebook_loss.mean()
+            loss = nll_loss + g_loss * switch_weight + self.codebook_weight * codebook_loss.mean()
+            # loss = nll_loss + d_weight * disc_factor * g_loss * switch_weight + self.codebook_weight * codebook_loss.mean()
 
             log = {"{}/total_loss".format(split): loss.clone().detach().mean(),
                    "{}/quant_loss".format(split): codebook_loss.detach().mean(),
                    "{}/nll_loss".format(split): nll_loss.detach().mean(),
                    "{}/rec_loss".format(split): rec_loss.detach().mean(),
                    "{}/p_loss".format(split): p_loss.detach().mean(),
-                   "{}/d_weight".format(split): d_weight.detach(),
+                #    "{}/d_weight".format(split): d_weight.detach(),
                    "{}/disc_factor".format(split): torch.tensor(disc_factor),
                    "{}/g_loss".format(split): g_loss.detach().mean(),
                    }

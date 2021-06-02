@@ -61,7 +61,7 @@ class dataset_single(data.Dataset):
 
 
 class dataset_unpair(data.Dataset):
-    def __init__(self, root, mode, _class, resize=256, cropsize=256):
+    def __init__(self, root, mode, resize=256, cropsize=256):
         self.root = root
 
         # a

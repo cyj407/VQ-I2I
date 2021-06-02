@@ -36,9 +36,9 @@ if __name__ == "__main__":
     ##### MODIFY HERE
     batch_size = 3
     device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
-    _class = 'A'
-    ed = 512
-    ne = 128
+    _class = 'B'
+    ed = 256
+    ne = 512
     learning_rate = 1e-4
 
     train_data = dataset_single(root, 'train', _class, 286, 256)

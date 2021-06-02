@@ -52,7 +52,7 @@ def code_histogram(validation_originals, model):
     ze_a = model.quant_conv( model.encoder(validation_originals))   # (1, 256, 16, 16)
     zq_a, _, (_, _, enc_a_indice) = model.quantize(ze_a)
     # xrec = model.decode(zq_a)
-    xrec = model.decode_b(zq_a)
+    xrec = model.decode_a(zq_a)
     
     return enc_a_indice.cpu().numpy(), xrec#, histo.cpu().numpy()
 
@@ -90,7 +90,7 @@ if __name__ == "__main__":
     # root = '/eva_data/yujie/datasets/cat2dog'
     root = '/eva_data/yujie/datasets/afhq'
     
-    _class = 'A'
+    _class = 'B'
     # model_name = 'both_afhq{}_'.format(_class)
     model_name = 'both_afhq_'#.format(_class)
     # epoch = 25
@@ -113,10 +113,10 @@ if __name__ == "__main__":
     # m_lnorm = load_eval_model(m_lnorm_path, 'config_ln.yaml')
     # doc = ['512_512', '512_256', '512_128', '256_512', '256_256', '256_128']
     # doc = ['256_64', '256_128', '256_256', '256_512']
-    doc = ['256_256']
+    doc = ['256_512']
 
-    epochs = [i for i in range(20, 55, 5)]
-    _d = '256_256'
+    epochs = [i for i in range(50, 90, 5)]
+    _d = '256_512'
 
     model_list = []
     # for _d in doc:
@@ -124,7 +124,7 @@ if __name__ == "__main__":
         ed, ne = _d.split('_')
         ed, ne = int(ed), int(ne)
         # _name = _class + _d
-        _name = model_name + _d + '_switch_upd'
+        _name = model_name + _d + '_rec10_switch1'
 
         m_inorm_path = os.path.join(os.getcwd(), _name, 'vqgan_{}.pt'.format(epoch))
         m_inorm = load_eval_model(m_inorm_path, config, ed, ne)
@@ -138,13 +138,13 @@ if __name__ == "__main__":
         os.mkdir('res')
 
     
-    # if(not os.path.isdir(os.path.join(os.getcwd(), 'res', 'originals2'))):
-        # os.mkdir(os.path.join(os.getcwd(), 'res', 'originals2'))
+    # if(not os.path.isdir(os.path.join(os.getcwd(), 'res', 'originalsa'))):
+    #     os.mkdir(os.path.join(os.getcwd(), 'res', 'originalsa'))
     
     
     for epoch, _m in zip(epochs, model_list):
     # for _d, _m in zip(doc, model_list):
-        save_dir = '{}{}_{}_{}_{}_a2b_all'.format(model_name, mode, _class, _d, epoch)
+        save_dir = '{}{}_{}_{}_{}_b2a_101'.format(model_name, mode, _class, _d, epoch)
         print(save_dir)
         if(not os.path.isdir(os.path.join(os.getcwd(), 'res', save_dir))):
             os.mkdir(os.path.join(os.getcwd(), 'res', save_dir))
@@ -165,13 +165,13 @@ if __name__ == "__main__":
             # _, xrec_in = code_histogram(data, m_inorm)
             # _, xrec_in2 = code_histogram(data, m_inorm2)
             # _, xrec_org = code_histogram(data, model_a)
-            save_dir = '{}{}_{}_{}_{}_a2b_all'.format(model_name, mode, _class, _d, epoch)
+            save_dir = '{}{}_{}_{}_{}_b2a_101'.format(model_name, mode, _class, _d, epoch)
                 
                 # save_dir = 'setB_trans_{}_{}_{}_{}'.format(mode, _class, _d, epoch)
                 # print(save_dir)
             save_tensor(xrec_in, save_dir, i)
                
-        # save_tensor(data, 'originals2', i)
+        # save_tensor(data, 'originalsa', i)
         # save_tensor(xrec_in, 'cat_1100', i)
         # save_tensor(xrec_in2, 'cat_300', i)
         # save_tensor(xrec_org, 'cat_original', i)
