@@ -35,11 +35,11 @@ if __name__ == "__main__":
     
     ##### MODIFY HERE
     batch_size = 3
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
-    _class = 'B'
+    device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
+    _class = 'A'
     ed = 256
     ne = 512
-    learning_rate = 1e-4
+    learning_rate = 4.5e-6
 
     train_data = dataset_single(root, 'train', _class, 286, 256)
     # validation_data = dataset_single(root, 'test', 'A')
@@ -106,7 +106,7 @@ if __name__ == "__main__":
         os.mkdir(save_path)
 
 
-    for epoch in range(1, 50+1):
+    for epoch in range(51, 100+1):
         for i in range(iterations):
             data = next(iter(train_loader))
             data = data.to(device)

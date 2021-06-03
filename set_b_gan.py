@@ -31,20 +31,20 @@ def instantiate_from_config(config):
 if __name__ == "__main__":
 
     # ONLY MODIFY SETTING HERE
-    device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
-    batch_size = 1
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    batch_size = 3 # 128
     learning_rate = 1e-4        # 256/512 lr=4.5e-6 from 71 epochs
     ne = 512  # Enlarge
     ed = 256
     epoch_start = 1
-    epoch_end = 2
+    epoch_end = 50
     switch_weight = 0.1 # self-reconstruction : a2b/b2a = 10 : 1
-    save_path = 'both_afhq_{}_{}_g_switch_1e-1'.format(ed, ne)    # model dir
+    save_path = 'both_afhq_{}_{}_g_switch_1e-1_true_img128'.format(ed, ne)    # model dir
     print(save_path)
     root = '/eva_data/yujie/datasets/afhq'
 
     # load data
-    train_data = dataset_unpair(root, 'train', 286, 256)
+    train_data = dataset_unpair(root, 'train', 160, 128)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True)
 
 
@@ -54,6 +54,8 @@ if __name__ == "__main__":
     config.model.base_learning_rate = learning_rate
     config.model.params.embed_dim = ed
     config.model.params.n_embed = ne
+    config.model.z_channels = 128
+    config.model.resolution = 128
     model = instantiate_from_config(config.model)
     if(os.path.isfile(f)):
         print('load ' + f)
@@ -103,29 +105,8 @@ if __name__ == "__main__":
             dataA, dataB = dataA.to(device), dataB.to(device)
 
 
-            recA, _, qlossA = model(dataA, label=1)
+            # recA, _, qlossA = model(dataA, label=1)
             _, fakeA, _ = model(dataB, label=0)
-
-            ## Generator A
-            opt_ae.zero_grad()
-
-            aeloss_a, _ = model.loss_a(qlossA, dataA, recA, fake=fakeA, switch_weight=switch_weight, optimizer_idx=0, global_step=epoch,
-                                    last_layer=model.get_last_layer(label=1), split="train")
-            aeloss_a.backward()
-            opt_ae.step()
-
-
-            _, fakeB, _ = model(dataA, label=1)
-            recB, _, qlossB = model(dataB, label=0)
-
-            ## Generator B
-            opt_ae.zero_grad()
-
-            aeloss_b, _ = model.loss_b(qlossB, dataB, recB, fake=fakeB, switch_weight=switch_weight, optimizer_idx=0, global_step=epoch,
-                                    last_layer=model.get_last_layer(label=0), split="train")
-            aeloss_b.backward()
-            opt_ae.step()
-
 
             ## Discriminator A
             opt_disc_a.zero_grad()
@@ -138,6 +119,19 @@ if __name__ == "__main__":
             opt_disc_a.step()
 
 
+            recA, _, qlossA = model(dataA, label=1)
+            
+            ## Generator A
+            opt_ae.zero_grad()
+
+            aeloss_a, _ = model.loss_a(qlossA, dataA, recA, fake=fakeA, switch_weight=switch_weight, optimizer_idx=0, global_step=epoch,
+                                    last_layer=model.get_last_layer(label=1), split="train")
+            aeloss_a.backward()
+            opt_ae.step()
+
+
+            _, fakeB, _ = model(dataA, label=1)
+
             ## Discriminator B
             opt_disc_b.zero_grad()
             a2b_loss, log = model.loss_b(_, dataB, fakeB, optimizer_idx=1, global_step=epoch,
@@ -146,6 +140,17 @@ if __name__ == "__main__":
             disc_b_loss = a2b_loss
             disc_b_loss.backward()
             opt_disc_b.step()
+
+
+            recB, _, qlossB = model(dataB, label=0)
+
+            ## Generator B
+            opt_ae.zero_grad()
+
+            aeloss_b, _ = model.loss_b(qlossB, dataB, recB, fake=fakeB, switch_weight=switch_weight, optimizer_idx=0, global_step=epoch,
+                                    last_layer=model.get_last_layer(label=0), split="train")
+            aeloss_b.backward()
+            opt_ae.step()
             
 
             # compute mse loss b/w input and reconstruction
