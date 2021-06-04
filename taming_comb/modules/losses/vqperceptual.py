@@ -117,17 +117,25 @@ class VQLPIPSWithDiscriminator(nn.Module):
 
             g_loss = -torch.mean(logits_fake)
 
-            # try:
-            #     d_weight = self.calculate_adaptive_weight(nll_loss, g_loss, last_layer=last_layer)
-            # except RuntimeError:
-            #     assert not self.training
-            #     d_weight = torch.tensor(0.0)
 
             # d_weight = torch.tensor(1.0)
 
-
+            ### self-reconstruction also feed into discriminator
+            logits_fake = self.discriminator(reconstructions.contiguous())
+            g_rec_loss = -torch.mean(logits_fake)
+            try:
+                d_weight = self.calculate_adaptive_weight(nll_loss, g_rec_loss, last_layer=last_layer)
+            except RuntimeError:
+                assert not self.training
+                d_weight = torch.tensor(0.0)
             disc_factor = adopt_weight(self.disc_factor, global_step, threshold=self.discriminator_iter_start)
-            loss = nll_loss + g_loss * switch_weight + self.codebook_weight * codebook_loss.mean()
+            selfrec_loss = nll_loss + d_weight * disc_factor * g_rec_loss + self.codebook_weight * codebook_loss.mean()
+            switch_loss = g_loss * switch_weight
+            loss = selfrec_loss + switch_loss
+
+            ### only switch decoder feed into disciminator
+            # disc_factor = adopt_weight(self.disc_factor, global_step, threshold=self.discriminator_iter_start)
+            # loss = nll_loss + g_loss * switch_weight + self.codebook_weight * codebook_loss.mean()
             # loss = nll_loss + d_weight * disc_factor * g_loss * switch_weight + self.codebook_weight * codebook_loss.mean()
 
             log = {"{}/total_loss".format(split): loss.clone().detach().mean(),
@@ -136,7 +144,7 @@ class VQLPIPSWithDiscriminator(nn.Module):
                    "{}/rec_loss".format(split): rec_loss.detach().mean(),
                    "{}/p_loss".format(split): p_loss.detach().mean(),
                 #    "{}/d_weight".format(split): d_weight.detach(),
-                   "{}/disc_factor".format(split): torch.tensor(disc_factor),
+                #    "{}/disc_factor".format(split): torch.tensor(disc_factor),
                    "{}/g_loss".format(split): g_loss.detach().mean(),
                    }
             return loss, log

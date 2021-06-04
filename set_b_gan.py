@@ -31,7 +31,7 @@ def instantiate_from_config(config):
 if __name__ == "__main__":
 
     # ONLY MODIFY SETTING HERE
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
     batch_size = 3 # 128
     learning_rate = 1e-4        # 256/512 lr=4.5e-6 from 71 epochs
     ne = 512  # Enlarge
@@ -39,7 +39,7 @@ if __name__ == "__main__":
     epoch_start = 1
     epoch_end = 50
     switch_weight = 0.1 # self-reconstruction : a2b/b2a = 10 : 1
-    save_path = 'both_afhq_{}_{}_g_switch_1e-1_true_img128'.format(ed, ne)    # model dir
+    save_path = 'both_afhq_{}_{}_rec_switch_img128'.format(ed, ne)    # model dir
     print(save_path)
     root = '/eva_data/yujie/datasets/afhq'
 
@@ -90,8 +90,8 @@ if __name__ == "__main__":
 
     train_ae_a_error = []
     train_ae_b_error = []
-    # train_disc_a_error = []
-    # train_disc_b_error = []
+    train_disc_a_error = []
+    train_disc_b_error = []
     train_disc_a2b_error = []
     train_disc_b2a_error = []
     train_res_rec_error = []
@@ -114,12 +114,17 @@ if __name__ == "__main__":
             b2a_loss, log = model.loss_a(_, dataA, fakeA, optimizer_idx=1, global_step=epoch,
                                     last_layer=None, split="train")
             
-            disc_a_loss = b2a_loss
+            ## self-rec feed into discriminator
+            recA, _, qlossA = model(dataA, label=1)
+            rec_loss, log = model.loss_a(_, dataA, recA, optimizer_idx=1, global_step=epoch,
+                                    last_layer=None, split="train")
+
+            disc_a_loss = b2a_loss + rec_loss
             disc_a_loss.backward()
             opt_disc_a.step()
 
 
-            recA, _, qlossA = model(dataA, label=1)
+            # recA, _, qlossA = model(dataA, label=1)
             
             ## Generator A
             opt_ae.zero_grad()
@@ -137,12 +142,17 @@ if __name__ == "__main__":
             a2b_loss, log = model.loss_b(_, dataB, fakeB, optimizer_idx=1, global_step=epoch,
                                     last_layer=None, split="train")
             
-            disc_b_loss = a2b_loss
+            ## self-rec feed into discriminator
+            recB, _, qlossB = model(dataB, label=0)
+            rec_loss, log = model.loss_b(_, dataB, recB, optimizer_idx=1, global_step=epoch,
+                                    last_layer=None, split="train")
+            
+            disc_b_loss = a2b_loss + rec_loss
             disc_b_loss.backward()
             opt_disc_b.step()
 
 
-            recB, _, qlossB = model(dataB, label=0)
+            # recB, _, qlossB = model(dataB, label=0)
 
             ## Generator B
             opt_ae.zero_grad()
@@ -161,19 +171,19 @@ if __name__ == "__main__":
             train_res_rec_error.append(recon_error.item())
             train_ae_a_error.append(aeloss_a.item())
             train_ae_b_error.append(aeloss_b.item())
-            # train_disc_a_error.append(discloss_a.item())
-            # train_disc_b_error.append(discloss_b.item())
+            train_disc_a_error.append(disc_a_loss.item())
+            train_disc_b_error.append(disc_b_loss.item())
             train_disc_a2b_error.append(a2b_loss.item())
             train_disc_b2a_error.append(b2a_loss.item())
 
             if (i+1) % 100 == 0:
                 _rec  = 'epoch {}, {} iterations\n'.format(epoch, i+1)
                 _rec += '(A domain) ae_loss: {:8f}, disc_loss: {:8f}\n'.format(
-                            np.mean(train_ae_a_error[-100:]), np.mean(train_disc_a2b_error[-100:]))
+                            np.mean(train_ae_a_error[-100:]), np.mean(train_disc_a_error[-100:]))
                 _rec += '(B domain) ae_loss: {:8f}, disc_loss: {:8f}\n'.format(
-                            np.mean(train_ae_b_error[-100:]), np.mean(train_disc_b2a_error[-100:]))
-                # _rec += 'A vs A2B loss: {:8f}, B vs B2A loss: {:8f}\n'.format(
-                #             np.mean(train_disc_a2b_error[-100:]), np.mean(train_disc_b2a_error[-100:]))
+                            np.mean(train_ae_b_error[-100:]), np.mean(train_disc_b_error[-100:]))
+                _rec += 'A vs A2B loss: {:8f}, B vs B2A loss: {:8f}\n'.format(
+                            np.mean(train_disc_a2b_error[-100:]), np.mean(train_disc_b2a_error[-100:]))
                 _rec += 'recon_error: {:8f}\n\n'.format(
                     np.mean(train_res_rec_error[-100:]))
                 # print(_rec)
