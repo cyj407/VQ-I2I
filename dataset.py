@@ -7,7 +7,7 @@ import torch
 import numpy as np
 
 class dataset_single(data.Dataset):
-    def __init__(self, root, mode, _class, resize=256, cropsize=256):
+    def __init__(self, root, mode, _class, resize=256, cropsize=256, flip=True):
         self.root = root
 
         # a
@@ -32,7 +32,8 @@ class dataset_single(data.Dataset):
             transforms.append(CenterCrop(cropsize))
 
         ## flip
-        transforms.append(RandomHorizontalFlip())
+        if(flip):
+            transforms.append(RandomHorizontalFlip())
 
         transforms.append(ToTensor())
         transforms.append(Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]))

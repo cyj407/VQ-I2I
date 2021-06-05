@@ -48,30 +48,21 @@ def save_image(image_numpy, image_path, aspect_ratio=1.0):
     #     image_pil = image_pil.resize((int(h / aspect_ratio), w), Image.BICUBIC)
     image_pil.save(image_path)
 
-def code_histogram(validation_originals, model):
-    ze_a = model.quant_conv( model.encoder(validation_originals))   # (1, 256, 16, 16)
-    zq_a, _, (_, _, enc_a_indice) = model.quantize(ze_a)
-    # xrec = model.decode(zq_a)
-    xrec = model.decode_a(zq_a)
-    
-    return enc_a_indice.cpu().numpy(), xrec#, histo.cpu().numpy()
 
-
-def load_eval_model(_path, config_file, ed, ne):
-    # a_path = os.path.join(os.getcwd(), 'a_model_w_3e-1', 'vqgan_880.pt')
-    # model_a = torch.load(a_path, map_location=device)
+def load_eval_model(_path, config_file, ed, ne, target, img_size):
     from omegaconf import OmegaConf
     from main_setting_a import get_obj_from_str, instantiate_from_config
     config = OmegaConf.load(config_file)
     # print(config.model.params.n_embed)
-
+    config.model.target = target
+    config.model.z_channels = img_size
+    config.model.resolution = img_size
     config.model.params.n_embed = ne
     config.model.params.embed_dim = ed
     model_a = instantiate_from_config(config.model)
     ck = torch.load(_path, map_location=device)
     model_a.load_state_dict(ck['model_state_dict'], strict=False)
     model_a = model_a.to(device)
-    # print(model_a.loss.discriminator)
     return model_a.eval()
 
 
@@ -81,70 +72,43 @@ def save_tensor(im_data, image_dir, image_name):
     save_image(im, save_path)
 
 
-device = torch.device('cuda:0')
+device = torch.device('cuda:2')
 
 
 if __name__ == "__main__":
 
     # dataloader
-    # root = '/eva_data/yujie/datasets/cat2dog'
     root = '/eva_data/yujie/datasets/afhq'
-    
-    _class = 'B'
-    # model_name = 'both_afhq{}_'.format(_class)
-    model_name = 'both_afhq_'#.format(_class)
-    # epoch = 25
+    _class = 'A'
+    epochs = [50]
     mode = 'test'   # or 'train'
-    config = 'config_comb.yaml'
-    
-    # if(_class == 'cat'):        
-        # train_data = dataset_single(root, 'train', 'A')
-    # if(_class == 'both'):
-    validation_data = dataset_single(root, mode, _class, 256, 256)
-    # else:
-        # validation_data = dataset_unpair(root, mode, 286, 256)
-    
+    config = 'config_comb.yaml'    
+    ed = 256
+    ne = 512
+    img_size = 128
+    validation_data = dataset_single(root, mode, _class, img_size, img_size)
+    # model_name = 'both_afhq_{}_{}_rec10_switch1'.format(ed, ne)
+    model_name = 'both_afhq_{}_{}_rec_switch_img{}'.format(ed, ne, img_size)
+    save_name = 'half_img{}_{}{}_{}_{}_a2b'.format( img_size, mode, _class, ed, ne)
+    # save_name = 'tmp_{}_{}{}_{}_{}_b2a'.format( img_size, mode, _class, ed, ne)
 
-    # m_inorm_path = os.path.join(os.getcwd(), 'cat_d_1_1e-1_512_512', 'vqgan_1100.pt')
-    # m_inorm_path2 = os.path.join(os.getcwd(), 'cat_d_1_1e-1_512_512', 'vqgan_300.pt')
-    # m_inorm_path2 = os.path.join(os.getcwd(), 'cat_d_1_1e-1_512_512', 'vqgan_300.pt')
-    # m_lnorm_path = os.path.join(os.getcwd(), 'ln_d_a_model_1_1e-1', 'vqgan_950.pt')
-    # m_inorm = load_eval_model(m_inorm_path, 'config_cat2dog.yaml')
-    # m_lnorm = load_eval_model(m_lnorm_path, 'config_ln.yaml')
-    # doc = ['512_512', '512_256', '512_128', '256_512', '256_256', '256_128']
-    # doc = ['256_64', '256_128', '256_256', '256_512']
-    doc = ['256_512']
-
-    epochs = [i for i in range(50, 90, 5)]
-    _d = '256_512'
 
     model_list = []
-    # for _d in doc:
     for epoch in epochs:
-        ed, ne = _d.split('_')
-        ed, ne = int(ed), int(ne)
-        # _name = _class + _d
-        _name = model_name + _d + '_rec10_switch1'
-
-        m_inorm_path = os.path.join(os.getcwd(), _name, 'vqgan_{}.pt'.format(epoch))
-        m_inorm = load_eval_model(m_inorm_path, config, ed, ne)
+        m_inorm_path = os.path.join(os.getcwd(), model_name, 'vqgan_{}.pt'.format(epoch))
+        m_inorm = load_eval_model(m_inorm_path, config, ed, ne, 'taming_comb.models.vqgan.VQModelCrossGAN', img_size)
         model_list.append(m_inorm)
-
-    # print(model_list)
 
     ############################
     
     if(not os.path.isdir('res')):
         os.mkdir('res')
 
-    
     # if(not os.path.isdir(os.path.join(os.getcwd(), 'res', 'originalsa'))):
     #     os.mkdir(os.path.join(os.getcwd(), 'res', 'originalsa'))
-    
-    
+        
     for epoch, _m in zip(epochs, model_list):
-    # for _d, _m in zip(doc, model_list):
-        save_dir = '{}{}_{}_{}_{}_b2a_101'.format(model_name, mode, _class, _d, epoch)
+        save_dir = '{}_{}'.format(save_name, epoch)
         print(save_dir)
         if(not os.path.isdir(os.path.join(os.getcwd(), 'res', save_dir))):
             os.mkdir(os.path.join(os.getcwd(), 'res', save_dir))
@@ -159,22 +123,14 @@ if __name__ == "__main__":
         data = data.to(device)
         
         for epoch, _m in zip(epochs, model_list):
-        # for _m in model_list:        
-        # for _d, _m in zip(doc, model_list):
-            _, xrec_in = code_histogram(data, _m)
-            # _, xrec_in = code_histogram(data, m_inorm)
-            # _, xrec_in2 = code_histogram(data, m_inorm2)
-            # _, xrec_org = code_histogram(data, model_a)
-            save_dir = '{}{}_{}_{}_{}_b2a_101'.format(model_name, mode, _class, _d, epoch)
-                
-                # save_dir = 'setB_trans_{}_{}_{}_{}'.format(mode, _class, _d, epoch)
-                # print(save_dir)
+
+            # forward
+            quant, _, _ = _m.encode(data)
+            xrec_in = _m.decode_b(quant)
+
+            save_dir = '{}_{}'.format(save_name, epoch)                
             save_tensor(xrec_in, save_dir, i)
                
         # save_tensor(data, 'originalsa', i)
-        # save_tensor(xrec_in, 'cat_1100', i)
-        # save_tensor(xrec_in2, 'cat_300', i)
-        # save_tensor(xrec_org, 'cat_original', i)
-        # save_tensor(xrec_ln, 'layer_norm', i)
         print(i)
     
