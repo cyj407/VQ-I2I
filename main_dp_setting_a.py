@@ -41,18 +41,22 @@ if __name__ == "__main__":
 
     # dataloader
     # root = './root/'
-    root = '/eva_data/yujie/datasets/summer2winter_yosemite'
-    train_data = dataset_single(root, 'train', 'A')
+    root = '/eva_data/yujie/datasets/afhq'
+    # train_data = dataset_single(root, 'train', 'A')
+    train_data = dataset_single(root, 'train', 'A', 286, 256)
     # validation_data = dataset_single(root, 'test', 'A')
 
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True)
 
 
     # model
-    save_path = 'a_model_1_1e-1'
+    save_path = 'afhqA_256_512'
 
     f = os.path.join(os.getcwd(), save_path, 'vqgan_latest.pt')
-    config = OmegaConf.load('config.yaml')
+    config = OmegaConf.load('config_cat2dog.yaml')
+    config.model.base_learning_rate = learning_rate
+    config.model.params.embed_dim = 256
+    config.model.params.n_embed = 512
     model = instantiate_from_config(config.model)
     model = torch.nn.DataParallel(
         model, device_ids=device_ids, output_device=device_ids[0])
@@ -97,7 +101,7 @@ if __name__ == "__main__":
         os.mkdir(save_path)
 
 
-    for epoch in range(501, 700+1):
+    for epoch in range(121, 250+1):
         for i in range(iterations):
             data = next(iter(train_loader))
 
@@ -136,18 +140,19 @@ if __name__ == "__main__":
                     f.write(_rec)
                     f.close()
 
+        torch.save(
+            {
+                'model_state_dict': model.module.state_dict(),
+                'opt_ae_state_dict': opt_ae.module.state_dict(),
+                'opt_dic_state_dict': opt_disc.module.state_dict()
+            }, os.path.join(os.getcwd(), save_path, 'vqgan_latest.pt'))
+    
+
         # if(epoch == 1):
-        if(epoch % 20 == 0 and epoch >= 50):
+        if(epoch % 10 == 0 and epoch >= 50):
             torch.save(
                 {
                     'model_state_dict': model.module.state_dict(),
                     'opt_ae_state_dict': opt_ae.module.state_dict(),
                     'opt_dic_state_dict': opt_disc.module.state_dict()
                 }, os.path.join(os.getcwd(), save_path, 'vqgan_{}.pt'.format(epoch)))
-            torch.save(
-                {
-                    'model_state_dict': model.module.state_dict(),
-                    'opt_ae_state_dict': opt_ae.module.state_dict(),
-                    'opt_dic_state_dict': opt_disc.module.state_dict()
-                }, os.path.join(os.getcwd(), save_path, 'vqgan_latest.pt'))
-        

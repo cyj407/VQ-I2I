@@ -39,8 +39,8 @@ if __name__ == "__main__":
     epoch_start = 81
     epoch_end = 150
     switch_weight = 0.1 # self-reconstruction : a2b/b2a = 10 : 1
-    save_path = 'both_afhq_{}_{}_rec_switch_img128'.format(ed, ne)    # model dir
-    # save_path = 'both_afhq_{}_{}_2gloss_1dloss_img128'.format(ed, ne)    # model dir
+    # save_path = 'both_afhq_{}_{}_rec_switch_img128'.format(ed, ne)    # model dir
+    save_path = 'both_afhq_{}_{}_2gloss_1dloss_img128'.format(ed, ne)    # model dir
     print(save_path)
     root = '/eva_data/yujie/datasets/afhq'
 
@@ -116,16 +116,16 @@ if __name__ == "__main__":
                                     last_layer=None, split="train")
             
             ## self-rec feed into discriminator
-            recA, _, qlossA = model(dataA, label=1)
-            rec_loss, log = model.loss_a(_, dataA, recA, optimizer_idx=1, global_step=epoch,
-                                    last_layer=None, split="train")
+            # recA, _, qlossA = model(dataA, label=1)
+            # rec_loss, log = model.loss_a(_, dataA, recA, optimizer_idx=1, global_step=epoch,
+            #                         last_layer=None, split="train")
 
-            disc_a_loss = b2a_loss + rec_loss
+            disc_a_loss = b2a_loss #+ rec_loss
             disc_a_loss.backward()
             opt_disc_a.step()
 
 
-            # recA, _, qlossA = model(dataA, label=1)
+            recA, _, qlossA = model(dataA, label=1)
             
             ## Generator A
             opt_ae.zero_grad()
@@ -144,16 +144,16 @@ if __name__ == "__main__":
                                     last_layer=None, split="train")
             
             ## self-rec feed into discriminator
-            recB, _, qlossB = model(dataB, label=0)
-            rec_loss, log = model.loss_b(_, dataB, recB, optimizer_idx=1, global_step=epoch,
-                                    last_layer=None, split="train")
+            # recB, _, qlossB = model(dataB, label=0)
+            # rec_loss, log = model.loss_b(_, dataB, recB, optimizer_idx=1, global_step=epoch,
+            #                         last_layer=None, split="train")
             
-            disc_b_loss = a2b_loss + rec_loss
+            disc_b_loss = a2b_loss #+ rec_loss
             disc_b_loss.backward()
             opt_disc_b.step()
 
 
-            # recB, _, qlossB = model(dataB, label=0)
+            recB, _, qlossB = model(dataB, label=0)
 
             ## Generator B
             opt_ae.zero_grad()

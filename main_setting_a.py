@@ -10,6 +10,8 @@ from dataset import dataset_single
 from torch.utils.data import DataLoader
 import os
 
+device = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
+
 
 def get_obj_from_str(string, reload=False):
     module, cls = string.rsplit(".", 1)
@@ -35,8 +37,8 @@ if __name__ == "__main__":
     
     ##### MODIFY HERE
     batch_size = 3
-    device = torch.device("cuda:3" if torch.cuda.is_available() else "cpu")
-    _class = 'A'
+    # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    _class = 'B'
     ed = 256
     ne = 512
     learning_rate = 4.5e-6
@@ -68,7 +70,16 @@ if __name__ == "__main__":
     config.model.params.embed_dim = ed
     config.model.params.n_embed = ne
 
+    # print(torch.cuda.device_count())
     model = instantiate_from_config(config.model)
+    # model = torch.nn.DataParallel(#model).to(device)
+    #     model, device_ids=device_ids, output_device=device_ids[1]).to(device)
+
+
+    ### important
+    # if isinstance(model, torch.nn.DataParallel):
+    #     model = model.module
+
     if(os.path.isfile(f)):
         print('load ' + f)
         ck = torch.load(f, map_location=device)
@@ -77,15 +88,27 @@ if __name__ == "__main__":
     model.train()
 
     # print(model.loss.discriminator)
-    
     opt_ae = torch.optim.Adam(list(model.encoder.parameters())+
                                 list(model.decoder.parameters())+
                                 list(model.quantize.parameters())+
                                 list(model.quant_conv.parameters())+
                                 list(model.post_quant_conv.parameters()),
                                 lr=learning_rate, betas=(0.5, 0.9))
+    # opt_ae = torch.nn.DataParallel(opt_ae, device_ids=device_ids)
+
+    ### important
+    # if isinstance(opt_ae, torch.nn.DataParallel):
+    #     opt_ae = opt_ae.module
+
     opt_disc = torch.optim.Adam(model.loss.discriminator.parameters(),
                                 lr=learning_rate, betas=(0.5, 0.9))
+    
+    # opt_disc = torch.nn.DataParallel(opt_disc, device_ids=device_ids)
+
+    ### important
+    # if isinstance(opt_disc, torch.nn.DataParallel):
+    #     opt_disc = opt_disc.module
+
     if(os.path.isfile(f)):
         print('load ' + f)
         opt_ae.load_state_dict(ck['opt_ae_state_dict'])
@@ -106,7 +129,7 @@ if __name__ == "__main__":
         os.mkdir(save_path)
 
 
-    for epoch in range(51, 100+1):
+    for epoch in range(251, 300+1):
         for i in range(iterations):
             data = next(iter(train_loader))
             data = data.to(device)

@@ -73,14 +73,15 @@ def save_tensor(im_data, image_dir, image_name):
 
 
 device = torch.device('cuda:2')
+print(torch.cuda.device_count())
 
 
 if __name__ == "__main__":
 
     # dataloader
     root = '/eva_data/yujie/datasets/afhq'
-    _class = 'A'
-    epochs = [50]
+    _class = 'B'
+    epochs = [80]
     mode = 'test'   # or 'train'
     config = 'config_comb.yaml'    
     ed = 256
@@ -88,8 +89,8 @@ if __name__ == "__main__":
     img_size = 128
     validation_data = dataset_single(root, mode, _class, img_size, img_size)
     # model_name = 'both_afhq_{}_{}_rec10_switch1'.format(ed, ne)
-    model_name = 'both_afhq_{}_{}_rec_switch_img{}'.format(ed, ne, img_size)
-    save_name = 'half_img{}_{}{}_{}_{}_a2b'.format( img_size, mode, _class, ed, ne)
+    model_name = 'both_afhq_{}_{}_2gloss_1dloss_img{}'.format(ed, ne, img_size)
+    save_name = '2g1d_img{}_{}{}_{}_{}_b2a'.format( img_size, mode, _class, ed, ne)
     # save_name = 'tmp_{}_{}{}_{}_{}_b2a'.format( img_size, mode, _class, ed, ne)
 
 
@@ -126,7 +127,7 @@ if __name__ == "__main__":
 
             # forward
             quant, _, _ = _m.encode(data)
-            xrec_in = _m.decode_b(quant)
+            xrec_in = _m.decode_a(quant)
 
             save_dir = '{}_{}'.format(save_name, epoch)                
             save_tensor(xrec_in, save_dir, i)
