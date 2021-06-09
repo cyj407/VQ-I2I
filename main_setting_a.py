@@ -129,7 +129,7 @@ if __name__ == "__main__":
         os.mkdir(save_path)
 
 
-    for epoch in range(251, 300+1):
+    for epoch in range(261, 300+1):
         for i in range(iterations):
             data = next(iter(train_loader))
             data = data.to(device)
