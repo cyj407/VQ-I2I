@@ -1,5 +1,6 @@
 .vscode/
 __pycache__/
+*.pyc
 taming_comb/__pycache__/
 .ipynb_checkpoints/
 

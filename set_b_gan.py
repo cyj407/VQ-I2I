@@ -31,13 +31,13 @@ def instantiate_from_config(config):
 if __name__ == "__main__":
 
     # ONLY MODIFY SETTING HERE
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
     batch_size = 3 # 128
     learning_rate = 4.5e-6        # 256/512 lr=4.5e-6 from 71 epochs
     ne = 512  # Enlarge
     ed = 256
-    epoch_start = 81
-    epoch_end = 150
+    epoch_start = 151
+    epoch_end = 300
     switch_weight = 0.1 # self-reconstruction : a2b/b2a = 10 : 1
     save_path = 'both_afhq_{}_{}_rec_switch_img128'.format(ed, ne)    # model dir
     # save_path = 'both_afhq_{}_{}_2gloss_1dloss_img128'.format(ed, ne)    # model dir
@@ -201,7 +201,7 @@ if __name__ == "__main__":
             }, os.path.join(os.getcwd(), save_path, 'vqgan_latest.pt'))
 
 
-        if(epoch % 5 == 0 and epoch >= 20):
+        if(epoch % 10 == 0 and epoch >= 20):
             torch.save(
                 {
                     'model_state_dict': model.state_dict(),
