@@ -33,11 +33,11 @@ if __name__ == "__main__":
     # ONLY MODIFY SETTING HERE
     device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     batch_size = 3 # 128
-    learning_rate = 4.5e-6        # 256/512 lr=4.5e-6 from 71 epochs
+    learning_rate = 1e-6        # 256/512 lr=4.5e-6 from 71 epochs , use 1e-6 from 201 epoch
     ne = 512  # Enlarge
     ed = 256
-    epoch_start = 151
-    epoch_end = 300
+    epoch_start = 301
+    epoch_end = 350
     switch_weight = 0.1 # self-reconstruction : a2b/b2a = 10 : 1
     # save_path = 'both_afhq_{}_{}_rec_switch_img128'.format(ed, ne)    # model dir
     save_path = 'both_afhq_{}_{}_2gloss_1dloss_img128'.format(ed, ne)    # model dir
