@@ -72,8 +72,7 @@ def save_tensor(im_data, image_dir, image_name):
     save_image(im, save_path)
 
 
-device = torch.device('cuda:3')
-print(torch.cuda.device_count())
+device = torch.device('cuda:0')
 
 
 if __name__ == "__main__":
@@ -81,17 +80,17 @@ if __name__ == "__main__":
     # dataloader
     root = '/eva_data/yujie/datasets/afhq'
     _class = 'A'
-    epochs = [i for i in range(170, 250, 10)]
+    epochs = [i for i in range(350, 360, 10)]
     mode = 'test'   # or 'train'
     config = 'config_comb.yaml'    
     ed = 256
     ne = 512
     img_size = 128
     validation_data = dataset_single(root, mode, _class, img_size, img_size, flip=False)
-    model_name = 'both_afhq_{}_{}_rec_switch_img{}'.format(ed, ne, img_size)
-    save_name = 'half_img{}_{}{}_{}_{}_a2b'.format( img_size, mode, _class, ed, ne)
-    # model_name = 'both_afhq_{}_{}_2gloss_1dloss_img{}'.format(ed, ne, img_size)
-    # save_name = '2g1d_img{}_{}{}_{}_{}_b2a'.format( img_size, mode, _class, ed, ne)
+    # model_name = 'both_afhq_{}_{}_rec_switch_img{}'.format(ed, ne, img_size)
+    # save_name = 'half_img{}_{}{}_{}_{}_b2a'.format( img_size, mode, _class, ed, ne)
+    model_name = 'both_afhq_{}_{}_2gloss_1dloss_img{}'.format(ed, ne, img_size)
+    save_name = '2g1d_img{}_{}{}_{}_{}_a2b'.format( img_size, mode, _class, ed, ne)
     
 
     model_list = []
@@ -118,6 +117,8 @@ if __name__ == "__main__":
     # data loader
     test_loader = DataLoader(validation_data, batch_size=1, shuffle=False, pin_memory=True)
     
+    test_img_name = validation_data.get_img_name()
+    
     for i, data in enumerate(test_loader):
         # print(data.shape)   # (1, 3, 256, 256)
 
@@ -128,9 +129,12 @@ if __name__ == "__main__":
             # forward
             quant, _, _ = _m.encode(data)
             xrec_in = _m.decode_b(quant)
+            
+            img_name = test_img_name[i].rsplit('/', 1)[-1]
+            # save_name = os.path.join(save_name, image_name)
 
             save_dir = '{}_{}'.format(save_name, epoch)                
-            save_tensor(xrec_in, save_dir, i)
+            save_tensor(xrec_in, save_dir, img_name)
                
         # save_tensor(data, 'originalsa', i)
         print(i)

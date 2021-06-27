@@ -31,18 +31,21 @@ def instantiate_from_config(config):
 if __name__ == "__main__":
 
     # ONLY MODIFY SETTING HERE
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
     batch_size = 3 # 128
-    learning_rate = 1e-6        # 256/512 lr=4.5e-6 from 71 epochs , use 1e-6 from 201 epoch
+    learning_rate = 1e-4        # 256/512 lr=4.5e-6 from 71 epochs , use 1e-6 from 201 epoch
     ne = 512  # Enlarge
     ed = 256
-    epoch_start = 301
-    epoch_end = 350
+    epoch_start = 1
+    epoch_end = 70 #700
     switch_weight = 0.1 # self-reconstruction : a2b/b2a = 10 : 1
+    dataset = 'horse2zebra'
+
+    
     # save_path = 'both_afhq_{}_{}_rec_switch_img128'.format(ed, ne)    # model dir
-    save_path = 'both_afhq_{}_{}_2gloss_1dloss_img128'.format(ed, ne)    # model dir
+    save_path = 'both_{}_{}_{}_2gloss_1dloss_img128'.format(dataset, ed, ne)    # model dir
     print(save_path)
-    root = '/eva_data/yujie/datasets/afhq'
+    root = '/eva_data/yujie/datasets/{}'.format(dataset)
 
     # load data
     train_data = dataset_unpair(root, 'train', 160, 128)
@@ -201,7 +204,7 @@ if __name__ == "__main__":
             }, os.path.join(os.getcwd(), save_path, 'vqgan_latest.pt'))
 
 
-        if(epoch % 10 == 0 and epoch >= 20):
+        if(epoch % 20 == 0 and epoch >= 20):
             torch.save(
                 {
                     'model_state_dict': model.state_dict(),

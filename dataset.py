@@ -60,6 +60,8 @@ class dataset_single(data.Dataset):
             img = img.unsqueeze(0)
         return img
 
+    def get_img_name(self):
+        return self.A
 
 class dataset_unpair(data.Dataset):
     def __init__(self, root, mode, resize=256, cropsize=256):
