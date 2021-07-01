@@ -39,13 +39,16 @@ if __name__ == "__main__":
     epoch_start = 1
     epoch_end = 70 #700
     switch_weight = 0.1 # self-reconstruction : a2b/b2a = 10 : 1
-    dataset = 'horse2zebra'
-
+    dataset = 'cityscapes'
+    if(dataset == 'summer2winter'):
+        dataset_dir = dataset + '_yosemite'
+    else:
+        dataset_dir = dataset
     
     # save_path = 'both_afhq_{}_{}_rec_switch_img128'.format(ed, ne)    # model dir
     save_path = 'both_{}_{}_{}_2gloss_1dloss_img128'.format(dataset, ed, ne)    # model dir
     print(save_path)
-    root = '/eva_data/yujie/datasets/{}'.format(dataset)
+    root = '/eva_data/yujie/datasets/{}'.format(dataset_dir)
 
     # load data
     train_data = dataset_unpair(root, 'train', 160, 128)

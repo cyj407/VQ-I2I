@@ -5,7 +5,7 @@ taming_comb/__pycache__/
 .ipynb_checkpoints/
 
 # reconstructions
-res/
+res*/
 
 # model
 b_switch*/

@@ -80,17 +80,20 @@ if __name__ == "__main__":
     # dataloader
     root = '/eva_data/yujie/datasets/afhq'
     _class = 'A'
-    epochs = [i for i in range(350, 360, 10)]
+    epochs = [330, 380, 420]
+    # epochs = [i for i in range(260, 280, 20)]
     mode = 'test'   # or 'train'
     config = 'config_comb.yaml'    
     ed = 256
     ne = 512
     img_size = 128
     validation_data = dataset_single(root, mode, _class, img_size, img_size, flip=False)
-    # model_name = 'both_afhq_{}_{}_rec_switch_img{}'.format(ed, ne, img_size)
-    # save_name = 'half_img{}_{}{}_{}_{}_b2a'.format( img_size, mode, _class, ed, ne)
-    model_name = 'both_afhq_{}_{}_2gloss_1dloss_img{}'.format(ed, ne, img_size)
-    save_name = '2g1d_img{}_{}{}_{}_{}_a2b'.format( img_size, mode, _class, ed, ne)
+    model_name = 'both_afhq_{}_{}_rec_switch_img{}'.format(ed, ne, img_size)
+    save_name = 'half_img{}_{}{}_{}_{}_a2b'.format( img_size, mode, _class, ed, ne)
+    # model_name = 'both_afhq_{}_{}_2gloss_1dloss_img{}'.format(ed, ne, img_size)
+    # save_name = '2g1d_img{}_{}{}_{}_{}_b2a'.format( img_size, mode, _class, ed, ne)
+    # model_name = 'both_horse2zebra_{}_{}_2gloss_1dloss_img{}'.format(ed, ne, img_size)
+    # save_name = '2g1d_img{}_hz_{}{}_{}_{}_rec'.format( img_size, mode, _class, ed, ne)
     
 
     model_list = []
