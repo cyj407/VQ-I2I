@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from taming_comb.modules.styleencoder.network import *
+from taming_comb.modules.style_encoder.network import *
 
 def get_timestep_embedding(timesteps, embedding_dim):
     """
@@ -554,7 +554,7 @@ class Decoder(nn.Module):
                                        padding=1)
         
         # AdaIN residual blocks
-        self.ADAresblocks = ADAResBlocks(4, block_in, 'adain', 'relu', pad_type='reflect')
+        self.ADAresblocks = ADAResBlocks(4, block_in, 'adain', 'relu', 'reflect')
         
         # middle
         self.mid = nn.Module()
@@ -609,7 +609,7 @@ class Decoder(nn.Module):
         h = self.conv_in(z)
         
         # AdaIN residual blocks
-        h = ADAresblocks(h)
+        h = self.ADAresblocks(h)
         
         # middle
         h = self.mid.block_1(h, temb)

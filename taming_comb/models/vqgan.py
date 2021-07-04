@@ -8,7 +8,7 @@ from torch.autograd import Variable
 from taming_comb.modules.diffusionmodules.model import * #Encoder, Decoder, VUNet
 from taming_comb.modules.vqvae.quantize import VectorQuantizer
 
-from taming_comb.modules.styleencoder.network import *
+#from taming_comb.modules.styleencoder.network import *
 
 
 def get_obj_from_str(string, reload=False):
