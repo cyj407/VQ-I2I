@@ -39,6 +39,12 @@ if __name__ == "__main__":
     epoch_start = 1
     epoch_end = 150
     switch_weight = 0.1 # self-reconstruction : a2b/b2a = 10 : 1
+    dataset = 'cityscapes'
+    if(dataset == 'summer2winter'):
+        dataset_dir = dataset + '_yosemite'
+    else:
+        dataset_dir = dataset
+    
     # save_path = 'both_afhq_{}_{}_rec_switch_img128'.format(ed, ne)    # model dir
     save_path = 'afhq_{}_{}_settingc'.format(ed, ne)    # model dir
     print(save_path)
@@ -227,7 +233,7 @@ if __name__ == "__main__":
             }, os.path.join(os.getcwd(), save_path, 'settingc_latest.pt'))
 
 
-        if(epoch % 5 == 0 and epoch >= 20):
+        if(epoch % 20 == 0 and epoch >= 20):
             torch.save(
                 {
                     'model_state_dict': model.state_dict(),

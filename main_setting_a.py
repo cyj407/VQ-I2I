@@ -10,7 +10,7 @@ from dataset import dataset_single
 from torch.utils.data import DataLoader
 import os
 
-device = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
+device = torch.device('cuda:3' if torch.cuda.is_available() else "cpu")
 
 
 def get_obj_from_str(string, reload=False):
@@ -38,7 +38,7 @@ if __name__ == "__main__":
     ##### MODIFY HERE
     batch_size = 3
     # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    _class = 'B'
+    _class = 'A'
     ed = 256
     ne = 512
     learning_rate = 4.5e-6
@@ -129,7 +129,7 @@ if __name__ == "__main__":
         os.mkdir(save_path)
 
 
-    for epoch in range(261, 300+1):
+    for epoch in range(251, 300+1):
         for i in range(iterations):
             data = next(iter(train_loader))
             data = data.to(device)
