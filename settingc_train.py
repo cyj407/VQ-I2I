@@ -51,7 +51,7 @@ if __name__ == "__main__":
     root = '/home/jenny/VQVAE-CUT/dataset/afhq_cat2dog/'
 
     # load data
-    train_data = dataset_unpair(root, 'train', 256, 256)
+    train_data = dataset_unpair(root, 'train', 128, 128)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True)
 
 
@@ -61,8 +61,8 @@ if __name__ == "__main__":
     config.model.base_learning_rate = learning_rate
     config.model.params.embed_dim = ed
     config.model.params.n_embed = ne
-    config.model.z_channels = 256
-    config.model.resolution = 256
+    config.model.z_channels = 128
+    config.model.resolution = 128
     model = instantiate_from_config(config.model)
     if(os.path.isfile(f)):
         print('load ' + f)
