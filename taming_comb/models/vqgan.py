@@ -1,11 +1,14 @@
 import torch
 import torch.nn.functional as F
-import pytorch_lightning as pl
+#import pytorch_lightning as pl
 import argparse, os, sys, datetime, glob, importlib
 import torch.nn as nn
+from torch.autograd import Variable
 
-from taming_comb.modules.diffusionmodules.model import Encoder, Decoder, VUNet
+from taming_comb.modules.diffusionmodules.model import * #Encoder, Decoder, VUNet
 from taming_comb.modules.vqvae.quantize import VectorQuantizer
+
+from taming_comb.modules.styleencoder.network import *
 
 
 def get_obj_from_str(string, reload=False):
@@ -23,7 +26,7 @@ def instantiate_from_config(config):
     return get_obj_from_str(config["target"])(**config.get("params", dict()))
 
 
-class VQModel(nn.Module):
+class VQModel_ADAIN(nn.Module):
     def __init__(self,
                  ddconfig,
                  lossconfig,
@@ -35,7 +38,7 @@ class VQModel(nn.Module):
                  colorize_nlabels=None,
                  monitor=None
                  ):
-        super(VQModel, self).__init__()
+        super(VQModel_ADAIN, self).__init__()
         self.image_key = image_key
         self.encoder = Encoder(**ddconfig)
         self.decoder_a = Decoder(**ddconfig)
@@ -45,44 +48,61 @@ class VQModel(nn.Module):
         self.quantize = VectorQuantizer(n_embed, embed_dim, beta=0.25)
         self.quant_conv = torch.nn.Conv2d(ddconfig["z_channels"], embed_dim, 1)
         self.post_quant_conv = torch.nn.Conv2d(embed_dim, ddconfig["z_channels"], 1)
+        
+        #style encoders
+        self.style_enc_a = StyleEncoder(4, 3, 64, 8, norm='none', activ='relu', pad_type='reflect')
+        
+        self.style_enc_b = StyleEncoder(4, 3, 64, 8, norm='none', activ='relu', pad_type='reflect')
+        
+        # MLP to generate AdaIN parameters
+        self.mlp_a = MLP(8, self.get_num_adain_params(self.decoder_a), 256, 3, norm='none', activ='relu')
+        
+        self.mlp_b = MLP(8, self.get_num_adain_params(self.decoder_b), 256, 3, norm='none', activ='relu')
+        
 
-    def encode(self, x):
+
+    def encode(self, x, label):
         h = self.encoder(x)
         h = self.quant_conv(h)
         quant, emb_loss, info = self.quantize(h)
-        return quant, emb_loss, info
+        
+        #encode style
+        if label == 1:
+            style_encoded = self.style_enc_a(h)
+        else:
+            style_encoded = self.style_enc_b(h)
+         
+        return quant, emb_loss, info, style_encoded
 
-    def decode_a(self, quant):
+    def decode_a(self, quant, style_a):
+        # decode content and style codes to an image
+        adain_params = self.mlp_a(style_a)
+        self.assign_adain_params(adain_params, self.decoder_a)
+        
         quant = self.post_quant_conv(quant)
         dec = self.decoder_a(quant)
         return dec
 
-    def decode_b(self, quant):
+    def decode_b(self, quant, style_b):
+        # decode content and style codes to an image
+        adain_params = self.mlp_b(style_b)
+        self.assign_adain_params(adain_params, self.decoder_b)
+        
         quant = self.post_quant_conv(quant)
         dec = self.decoder_b(quant)
         return dec
 
-    def decode_code(self, code_b):
-        quant_b = self.quantize.embed_code(code_b)
-        dec = self.decode(quant_b)
-        return dec
-
+ 
     def forward(self, input, label):
         if(label == 1):
-            quant, diff, _ = self.encode(input)
-            dec = self.decode_a(quant)
+            quant, diff, _, style_encoded = self.encode(input, label)
+            dec = self.decode_a(quant, style_encoded)
         else:
-            quant, diff, _ = self.encode(input)
-            dec = self.decode_b(quant)
+            quant, diff, _, style_encoded = self.encode(input, label)
+            dec = self.decode_b(quant, style_encoded)
 
         return dec, diff
 
-    def get_input(self, batch, k=None):
-        x = batch[k]
-        if len(x.shape) == 3:
-            x = x[..., None]
-        x = x.permute(0, 3, 1, 2).to(memory_format=torch.contiguous_format)
-        return x.float()
 
     def get_last_layer(self, label):
         if(label ==  1):
@@ -90,85 +110,31 @@ class VQModel(nn.Module):
         else:
             return self.decoder_b.conv_out.weight
 
+    def assign_adain_params(self, adain_params, model):
+        # assign the adain_params to the AdaIN layers in model
+        for m in model.modules():
+            if m.__class__.__name__ == "AdaptiveInstanceNorm2d":
+                mean = adain_params[:, :m.num_features]
+                std = adain_params[:, m.num_features:2*m.num_features]
+                m.bias = mean.contiguous().view(-1)
+                m.weight = std.contiguous().view(-1)
+                if adain_params.size(1) > 2*m.num_features:
+                    adain_params = adain_params[:, 2*m.num_features:]
 
-'''
-    def training_step(self, batch, batch_idx, optimizer_idx):
-        x = self.get_input(batch, self.image_key)
-        xrec, qloss = self(x)
+        
+    def get_num_adain_params(self, model):
+        # return the number of AdaIN parameters needed by the model
+        num_adain_params = 0
+        for m in model.modules():
+            if m.__class__.__name__ == "AdaptiveInstanceNorm2d":
+                num_adain_params += 2*m.num_features
+        return num_adain_params
 
-        if optimizer_idx == 0:
-            # autoencode
-            aeloss, log_dict_ae = self.loss(qloss, x, xrec, optimizer_idx, self.global_step,
-                                            last_layer=self.get_last_layer(), split="train")
-
-            self.log("train/aeloss", aeloss, prog_bar=True, logger=True, on_step=True, on_epoch=True)
-            self.log_dict(log_dict_ae, prog_bar=False, logger=True, on_step=True, on_epoch=True)
-            return aeloss
-
-        if optimizer_idx == 1:
-            # discriminator
-            discloss, log_dict_disc = self.loss(qloss, x, xrec, optimizer_idx, self.global_step,
-                                            last_layer=self.get_last_layer(), split="train")
-            self.log("train/discloss", discloss, prog_bar=True, logger=True, on_step=True, on_epoch=True)
-            self.log_dict(log_dict_disc, prog_bar=False, logger=True, on_step=True, on_epoch=True)
-            return discloss
-
-
-class VQSegmentationModel(VQModel):
-    def __init__(self, n_labels, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.register_buffer("colorize", torch.randn(3, n_labels, 1, 1))
-
-    def configure_optimizers(self):
-        lr = self.learning_rate
-        opt_ae = torch.optim.Adam(list(self.encoder.parameters())+
-                                  list(self.decoder.parameters())+
-                                  list(self.quantize.parameters())+
-                                  list(self.quant_conv.parameters())+
-                                  list(self.post_quant_conv.parameters()),
-                                  lr=lr, betas=(0.5, 0.9))
-        return opt_ae
-
-    def training_step(self, batch, batch_idx):
-        x = self.get_input(batch, self.image_key)
-        xrec, qloss = self(x)
-        aeloss, log_dict_ae = self.loss(qloss, x, xrec, split="train")
-        self.log_dict(log_dict_ae, prog_bar=False, logger=True, on_step=True, on_epoch=True)
-        return aeloss
-
-    def validation_step(self, batch, batch_idx):
-        x = self.get_input(batch, self.image_key)
-        xrec, qloss = self(x)
-        aeloss, log_dict_ae = self.loss(qloss, x, xrec, split="val")
-        self.log_dict(log_dict_ae, prog_bar=False, logger=True, on_step=True, on_epoch=True)
-        total_loss = log_dict_ae["val/total_loss"]
-        self.log("val/total_loss", total_loss,
-                 prog_bar=True, logger=True, on_step=True, on_epoch=True, sync_dist=True)
-        return aeloss
-
-    @torch.no_grad()
-    def log_images(self, batch, **kwargs):
-        log = dict()
-        x = self.get_input(batch, self.image_key)
-        x = x.to(self.device)
-        xrec, _ = self(x)
-        if x.shape[1] > 3:
-            # colorize with random projection
-            assert xrec.shape[1] > 3
-            # convert logits to indices
-            xrec = torch.argmax(xrec, dim=1, keepdim=True)
-            xrec = F.one_hot(xrec, num_classes=x.shape[1])
-            xrec = xrec.squeeze(1).permute(0, 3, 1, 2).float()
-            x = self.to_rgb(x)
-            xrec = self.to_rgb(xrec)
-        log["inputs"] = x
-        log["reconstructions"] = xrec
-        return log
-'''
-
+    
+    
 from taming_comb.modules.discriminator.model import NLayerDiscriminator
 from taming_comb.modules.losses.vqperceptual import hinge_d_loss
-class VQModelCrossGAN(VQModel):
+class VQModelCrossGAN_ADAIN(VQModel_ADAIN):
     def __init__(self,
                  ddconfig,
                  lossconfig,
@@ -180,162 +146,32 @@ class VQModelCrossGAN(VQModel):
                  colorize_nlabels=None,
                  monitor=None,
                  ):
-        super(VQModelCrossGAN, self).__init__(
+        super(VQModelCrossGAN_ADAIN, self).__init__(
             ddconfig, lossconfig, n_embed, embed_dim
         )
 
-    def forward(self, input, label):
-        quant, diff, _ = self.encode(input)
-
+    def forward(self, input, label, cross=False):
+        quant, diff, _, s = self.encode(input, label)
+        
+        # sample
+        s_a = Variable(torch.randn(input.size(0), 8, 1, 1).cuda())
+        s_b = Variable(torch.randn(input.size(0), 8, 1, 1).cuda())
+        
         if(label == 1):
-            rec = self.decode_a(quant)
-            fake = self.decode_b(quant)
+            if cross == False:
+                output = self.decode_a(quant, s)
+            else:
+                s = s_b
+                output = self.decode_b(quant, s_b)
         else:
-            rec = self.decode_b(quant)
-            fake = self.decode_a(quant)
+            if cross == False:
+                output = self.decode_b(quant, s)
+            else:
+                s = s_a
+                output = self.decode_a(quant, s_a)
         
-        return rec, fake, diff
+        return output, diff, s
+    
+    
 
 
-import pytorch_lightning as pl
-class VQModel_pl(pl.LightningModule):
-    def __init__(self,
-                 ddconfig,
-                 lossconfig,
-                 n_embed,
-                 embed_dim,
-                 ckpt_path=None,
-                 ignore_keys=[],
-                 image_key="image",
-                 colorize_nlabels=None,
-                 monitor=None
-                 ):
-        super(VQModel_pl, self).__init__()
-        self.image_key = image_key
-        self.encoder = Encoder(**ddconfig)
-        self.decoder = Decoder(**ddconfig)
-        self.loss = instantiate_from_config(lossconfig)
-        self.quantize = VectorQuantizer(n_embed, embed_dim, beta=0.25)
-        self.quant_conv = torch.nn.Conv2d(ddconfig["z_channels"], embed_dim, 1)
-        self.post_quant_conv = torch.nn.Conv2d(embed_dim, ddconfig["z_channels"], 1)
-
-    def encode(self, x):
-        h = self.encoder(x)
-        h = self.quant_conv(h)
-        quant, emb_loss, info = self.quantize(h)
-        return quant, emb_loss, info
-
-    def decode(self, quant):
-        quant = self.post_quant_conv(quant)
-        dec = self.decoder(quant)
-        return dec
-
-    def decode_code(self, code_b):
-        quant_b = self.quantize.embed_code(code_b)
-        dec = self.decode(quant_b)
-        return dec
-
-    def forward(self, input):
-        quant, diff, _ = self.encode(input)
-        dec = self.decode(quant)
-        return dec, diff
-
-    def get_input(self, batch, k=None):
-        x = batch[k]
-        if len(x.shape) == 3:
-            x = x[..., None]
-        x = x.permute(0, 3, 1, 2).to(memory_format=torch.contiguous_format)
-        return x.float()
-
-    def get_last_layer(self):
-        return self.decoder.conv_out.weight
-
-
-    def training_step(self, batch, batch_idx, optimizer_idx):
-        x = self.get_input(batch, self.image_key)
-        xrec, qloss = self(x)
-
-        recloss = F.mse_loss(x, xrec)
-        self.log("train/recloss", recloss, prog_bar=True, logger=True, on_step=True, on_epoch=True)
-
-        if optimizer_idx == 0:
-            # autoencode
-            aeloss, log_dict_ae = self.loss(qloss, x, xrec, optimizer_idx, self.global_step,
-                                            last_layer=self.get_last_layer(), split="train")
-
-            self.log("train/aeloss", aeloss, prog_bar=True, logger=True, on_step=True, on_epoch=True)
-            self.log_dict(log_dict_ae, prog_bar=False, logger=True, on_step=True, on_epoch=True)
-            return aeloss
-
-        if optimizer_idx == 1:
-            # discriminator
-            discloss, log_dict_disc = self.loss(qloss, x, xrec, optimizer_idx, self.global_step,
-                                            last_layer=self.get_last_layer(), split="train")
-            self.log("train/discloss", discloss, prog_bar=True, logger=True, on_step=True, on_epoch=True)
-            self.log_dict(log_dict_disc, prog_bar=False, logger=True, on_step=True, on_epoch=True)
-            return discloss
-
-
-    def configure_optimizers(self):
-        lr = self.learning_rate
-        opt_ae = torch.optim.Adam(list(self.encoder.parameters())+
-                                  list(self.decoder.parameters())+
-                                  list(self.quantize.parameters())+
-                                  list(self.quant_conv.parameters())+
-                                  list(self.post_quant_conv.parameters()),
-                                  lr=lr, betas=(0.5, 0.9))
-        opt_disc = torch.optim.Adam(self.loss.discriminator.parameters(),
-                                    lr=lr, betas=(0.5, 0.9))
-        return [opt_ae, opt_disc], []
-
-
-class VQNoDiscModel(VQModel):
-    def __init__(self,
-                 ddconfig,
-                 lossconfig,
-                 n_embed,
-                 embed_dim,
-                 ckpt_path=None,
-                 ignore_keys=[],
-                 image_key="image",
-                 colorize_nlabels=None
-                 ):
-        super().__init__(ddconfig=ddconfig, lossconfig=lossconfig, n_embed=n_embed, embed_dim=embed_dim,
-                         ckpt_path=ckpt_path, ignore_keys=ignore_keys, image_key=image_key,
-                         colorize_nlabels=colorize_nlabels)
-    '''
-        
-    def training_step(self, batch, batch_idx):
-        x = self.get_input(batch, self.image_key)
-        xrec, qloss = self(x)
-        # autoencode
-        aeloss, log_dict_ae = self.loss(qloss, x, xrec, self.global_step, split="train")
-        output = pl.TrainResult(minimize=aeloss)
-        output.log("train/aeloss", aeloss,
-                   prog_bar=True, logger=True, on_step=True, on_epoch=True)
-        output.log_dict(log_dict_ae, prog_bar=False, logger=True, on_step=True, on_epoch=True)
-        return output
-
-    def validation_step(self, batch, batch_idx):
-        x = self.get_input(batch, self.image_key)
-        xrec, qloss = self(x)
-        aeloss, log_dict_ae = self.loss(qloss, x, xrec, self.global_step, split="val")
-        rec_loss = log_dict_ae["val/rec_loss"]
-        output = pl.EvalResult(checkpoint_on=rec_loss)
-        output.log("val/rec_loss", rec_loss,
-                   prog_bar=True, logger=True, on_step=True, on_epoch=True)
-        output.log("val/aeloss", aeloss,
-                   prog_bar=True, logger=True, on_step=True, on_epoch=True)
-        output.log_dict(log_dict_ae)
-
-        return output
-
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(list(self.encoder.parameters())+
-                                  list(self.decoder.parameters())+
-                                  list(self.quantize.parameters())+
-                                  list(self.quant_conv.parameters())+
-                                  list(self.post_quant_conv.parameters()),
-                                  lr=self.learning_rate, betas=(0.5, 0.9))
-        return 
-    '''

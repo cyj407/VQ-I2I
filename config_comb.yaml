@@ -1,6 +1,6 @@
 model:
   base_learning_rate: 4.5e-6
-  target: taming_comb.models.vqgan.VQModel
+  target: taming_comb.models.vqgan.VQModelCrossGAN_ADAIN
   params:
     embed_dim: 512
     n_embed: 64
