@@ -118,7 +118,7 @@ class VQLPIPSWithDiscriminator(nn.Module):
             g_loss = -torch.mean(logits_fake)
 
 
-            # d_weight = torch.tensor(1.0)
+            d_weight = torch.tensor(1.0)
 
             ### self-reconstruction also feed into discriminator
             '''logits_fake = self.discriminator(reconstructions.contiguous())

@@ -10,7 +10,8 @@ from dataset import dataset_combine, dataset_unpair
 from torch.utils.data import DataLoader
 import os
 
-
+from taming_comb.modules.style_encoder.network import *
+from taming_comb.modules.diffusionmodules.model import * 
 
 def get_obj_from_str(string, reload=False):
     module, cls = string.rsplit(".", 1)
@@ -27,15 +28,17 @@ def instantiate_from_config(config):
     return get_obj_from_str(config["target"])(**config.get("params", dict()))
 
 
+os.environ["CUDA_VISIBLE_DEVICES"]='0'
+
 
 if __name__ == "__main__":
 
     # ONLY MODIFY SETTING HERE
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     batch_size = 1 # 128
     learning_rate = 1e-4        # 256/512 lr=4.5e-6 from 71 epochs
-    ne = 256  # Enlarge
-    ed = 256
+    ne = 128  # Enlarge
+    ed = 128
     epoch_start = 1
     epoch_end = 150
     switch_weight = 0.1 # self-reconstruction : a2b/b2a = 10 : 1
@@ -68,7 +71,7 @@ if __name__ == "__main__":
         print('load ' + f)
         ck = torch.load(f, map_location=device)
         model.load_state_dict(ck['model_state_dict'], strict=False)
-    model.to(device)
+    model = model.to(device)
     model.train()
 
     # print(model.loss.discriminator)
@@ -145,7 +148,7 @@ if __name__ == "__main__":
             recA_from_fake, _, s_a = model(fakeA, label=1, cross=False)
             
             # style loss
-            style_a_loss = torch.mean(torch.abs(s_a_sampled - s_a))
+            style_a_loss = torch.mean(torch.abs(s_a_sampled.to(s_a.device) - s_a))
             
             aeloss_a = aeloss_a + style_a_loss
             
@@ -158,7 +161,7 @@ if __name__ == "__main__":
             opt_disc_b.zero_grad()
             
             
-            _, fakeB, s_b_sampled = model(dataA, label=1, cross=True)
+            fakeB, _, s_b_sampled = model(dataA, label=1, cross=True)
             
             a2b_loss, log = model.loss_b(_, dataB, fakeB, optimizer_idx=1, global_step=epoch,
                                     last_layer=None, split="train")
@@ -219,7 +222,7 @@ if __name__ == "__main__":
                 _rec += 'style_b_loss: {:8f}\n\n'.format(
                     np.mean(train_style_b_loss[-100:]))
                 
-                # print(_rec)
+                print(_rec)
                 with open(os.path.join(os.getcwd(), save_path, 'loss.txt'), 'a') as f:
                     f.write(_rec)
                     f.close()

@@ -446,6 +446,7 @@ class ADAResBlocks(nn.Module):
         self.model = nn.Sequential(*self.model)
 
     def forward(self, x):
+        self.model = self.model.to(x.device)
         return self.model(x)
     
 class ADAResBlock(nn.Module):
@@ -459,6 +460,7 @@ class ADAResBlock(nn.Module):
 
     def forward(self, x):
         residual = x
+        self.model = self.model.to(x.device)
         out = self.model(x)
         out += residual
         return out
@@ -519,6 +521,7 @@ class Conv2dBlock(nn.Module):
     def forward(self, x):
         x = self.conv(self.pad(x))
         if self.norm:
+            self.norm = self.norm.to(x.device)
             x = self.norm(x)
         if self.activation:
             x = self.activation(x)
@@ -609,8 +612,8 @@ class Decoder(nn.Module):
         h = self.conv_in(z)
         
         # AdaIN residual blocks
+        self.ADAresblocks = self.ADAresblocks.to(h.device)
         h = self.ADAresblocks(h)
-        
         # middle
         h = self.mid.block_1(h, temb)
         h = self.mid.attn_1(h)

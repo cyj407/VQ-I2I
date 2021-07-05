@@ -8,8 +8,6 @@ from torch.autograd import Variable
 from taming_comb.modules.diffusionmodules.model import * #Encoder, Decoder, VUNet
 from taming_comb.modules.vqvae.quantize import VectorQuantizer
 
-#from taming_comb.modules.styleencoder.network import *
-
 
 def get_obj_from_str(string, reload=False):
     module, cls = string.rsplit(".", 1)
@@ -49,15 +47,18 @@ class VQModel_ADAIN(nn.Module):
         self.quant_conv = torch.nn.Conv2d(ddconfig["z_channels"], embed_dim, 1)
         self.post_quant_conv = torch.nn.Conv2d(embed_dim, ddconfig["z_channels"], 1)
         
+        
         #style encoders
         self.style_enc_a = StyleEncoder(4, 3, 64, 8, norm='none', activ='relu', pad_type='reflect')
         
         self.style_enc_b = StyleEncoder(4, 3, 64, 8, norm='none', activ='relu', pad_type='reflect')
         
         # MLP to generate AdaIN parameters
-        self.mlp_a = MLP(8, self.get_num_adain_params(self.decoder_a), 256, 3, norm='none', activ='relu')
+        n_a = self.get_num_adain_params(self.decoder_a)
+        n_b = self.get_num_adain_params(self.decoder_b)
         
-        self.mlp_b = MLP(8, self.get_num_adain_params(self.decoder_b), 256, 3, norm='none', activ='relu')
+        self.mlp_a = MLP(8, n_a, 256, 3, norm='none', activ='relu')  
+        self.mlp_b = MLP(8, n_b, 256, 3, norm='none', activ='relu')
         
 
 
@@ -68,23 +69,29 @@ class VQModel_ADAIN(nn.Module):
         
         #encode style
         if label == 1:
-            style_encoded = self.style_enc_a(h)
+            style_encoded = self.style_enc_a(x)
         else:
-            style_encoded = self.style_enc_b(h)
+            style_encoded = self.style_enc_b(x)
+            
+        style_encoded = style_encoded
          
         return quant, emb_loss, info, style_encoded
 
     def decode_a(self, quant, style_a):
         # decode content and style codes to an image
+        self.mlp_a = self.mlp_a.to(style_a.device)
         adain_params = self.mlp_a(style_a)
         self.assign_adain_params(adain_params, self.decoder_a)
+ 
         
         quant = self.post_quant_conv(quant)
+        
         dec = self.decoder_a(quant)
         return dec
 
     def decode_b(self, quant, style_b):
         # decode content and style codes to an image
+        self.mlp_b = self.mlp_b.to(style_b.device)
         adain_params = self.mlp_b(style_b)
         self.assign_adain_params(adain_params, self.decoder_b)
         
@@ -116,8 +123,8 @@ class VQModel_ADAIN(nn.Module):
             if m.__class__.__name__ == "AdaptiveInstanceNorm2d":
                 mean = adain_params[:, :m.num_features]
                 std = adain_params[:, m.num_features:2*m.num_features]
-                m.bias = mean.contiguous().view(-1)
-                m.weight = std.contiguous().view(-1)
+                m.bias = mean.contiguous().view(-1).to(adain_params.device)
+                m.weight = std.contiguous().view(-1).to(adain_params.device)
                 if adain_params.size(1) > 2*m.num_features:
                     adain_params = adain_params[:, 2*m.num_features:]
 
