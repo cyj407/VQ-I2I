@@ -76,6 +76,24 @@ class VQModel_ADAIN(nn.Module):
         style_encoded = style_encoded
          
         return quant, emb_loss, info, style_encoded
+    
+    
+    def encode_style(self, x, label):
+        if label == 1:
+            style_encoded = self.style_enc_a(x)
+        else:
+            style_encoded = self.style_enc_b(x)
+            
+        return style_encoded
+    
+    
+    def encode_content(self, x):
+        h = self.encoder(x)
+        h = self.quant_conv(h)
+        quant, _, _ = self.quantize(h)
+        return h, quant
+            
+    
 
     def decode_a(self, quant, style_a):
         # decode content and style codes to an image
@@ -157,25 +175,25 @@ class VQModelCrossGAN_ADAIN(VQModel_ADAIN):
             ddconfig, lossconfig, n_embed, embed_dim
         )
 
-    def forward(self, input, label, cross=False):
+    def forward(self, input, label, cross=False, s_given=False):
         quant, diff, _, s = self.encode(input, label)
         
         # sample
-        s_a = Variable(torch.randn(input.size(0), 8, 1, 1).cuda())
-        s_b = Variable(torch.randn(input.size(0), 8, 1, 1).cuda())
+        '''s_a = Variable(torch.randn(input.size(0), 8, 1, 1).cuda())
+        s_b = Variable(torch.randn(input.size(0), 8, 1, 1).cuda())'''
         
         if(label == 1):
             if cross == False:
                 output = self.decode_a(quant, s)
             else:
-                s = s_b
-                output = self.decode_b(quant, s_b)
+                s = s_given
+                output = self.decode_b(quant, s)
         else:
             if cross == False:
                 output = self.decode_b(quant, s)
             else:
-                s = s_a
-                output = self.decode_a(quant, s_a)
+                s = s_given
+                output = self.decode_a(quant, s)
         
         return output, diff, s
     

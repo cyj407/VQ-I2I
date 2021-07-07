@@ -38,15 +38,11 @@ if __name__ == "__main__":
     batch_size = 1 # 128
     learning_rate = 1e-4        # 256/512 lr=4.5e-6 from 71 epochs
     ne = 128  # Enlarge
-    ed = 128
+    ed = 256
     epoch_start = 1
     epoch_end = 150
     switch_weight = 0.1 # self-reconstruction : a2b/b2a = 10 : 1
-    dataset = 'cityscapes'
-    if(dataset == 'summer2winter'):
-        dataset_dir = dataset + '_yosemite'
-    else:
-        dataset_dir = dataset
+    
     
     # save_path = 'both_afhq_{}_{}_rec_switch_img128'.format(ed, ne)    # model dir
     save_path = 'afhq_{}_{}_settingc'.format(ed, ne)    # model dir
@@ -65,7 +61,7 @@ if __name__ == "__main__":
     config.model.params.embed_dim = ed
     config.model.params.n_embed = ne
     config.model.z_channels = 128
-    config.model.resolution = 128
+    config.model.resolution = 256
     model = instantiate_from_config(config.model)
     if(os.path.isfile(f)):
         print('load ' + f)
@@ -114,6 +110,8 @@ if __name__ == "__main__":
     
     train_style_a_loss = []
     train_style_b_loss = []
+    train_content_a_loss = []
+    train_content_b_loss = []
 
     iterations = len(train_data) // batch_size
     iterations = iterations + 1 if len(train_data) % batch_size != 0 else iterations
@@ -127,7 +125,8 @@ if __name__ == "__main__":
             ## Discriminator A
             opt_disc_a.zero_grad()
             
-            fakeA, _, s_a_sampled = model(dataB, label=0, cross=True)
+            s_a = model.encode_style(dataA, label=1)
+            fakeA, _, _ = model(dataB, label=0, cross=True, s_given=s_a)
             
             b2a_loss, log = model.loss_a(_, dataA, fakeA, optimizer_idx=1, global_step=epoch,
                                     last_layer=None, split="train")
@@ -145,12 +144,17 @@ if __name__ == "__main__":
             aeloss_a, _ = model.loss_a(qlossA, dataA, recA, fake=fakeA, switch_weight=switch_weight, optimizer_idx=0, global_step=epoch,
                                     last_layer=model.get_last_layer(label=1), split="train")
             
-            recA_from_fake, _, s_a = model(fakeA, label=1, cross=False)
+            AtoBtoA, _, s_a_from_cross = model(fakeA, label=1, cross=False)
             
             # style loss
-            style_a_loss = torch.mean(torch.abs(s_a_sampled.to(s_a.device) - s_a))
+            style_a_loss = torch.mean(torch.abs(s_a.detach() - s_a_from_cross))
             
-            aeloss_a = aeloss_a + style_a_loss
+            # content loss
+            c_b_from_cross, _ = model.encode_content(fakeA)
+            _, quant_c_b = model.encode_content(dataB)
+            content_b_loss = torch.mean(torch.abs(quant_c_b.detach() - c_b_from_cross))
+            
+            aeloss_a = aeloss_a + 0.3*(style_a_loss + content_b_loss)
             
             aeloss_a.backward()
             opt_ae.step()
@@ -160,8 +164,8 @@ if __name__ == "__main__":
             ## Discriminator B
             opt_disc_b.zero_grad()
             
-            
-            fakeB, _, s_b_sampled = model(dataA, label=1, cross=True)
+            s_b = model.encode_style(dataB, label=0)
+            fakeB, _, s_b_sampled = model(dataA, label=1, cross=True, s_given=s_b)
             
             a2b_loss, log = model.loss_b(_, dataB, fakeB, optimizer_idx=1, global_step=epoch,
                                     last_layer=None, split="train")
@@ -179,12 +183,17 @@ if __name__ == "__main__":
             aeloss_b, _ = model.loss_b(qlossB, dataB, recB, fake=fakeB, switch_weight=switch_weight, optimizer_idx=0, global_step=epoch,
                                     last_layer=model.get_last_layer(label=0), split="train")
             
-            recB_from_fake, _, s_b = model(fakeB, label=0, cross=False)
+            BtoAtoB, _, s_b_from_cross = model(fakeB, label=0, cross=False)
             
             # style loss
-            style_b_loss = torch.mean(torch.abs(s_b_sampled - s_b))
+            style_b_loss = torch.mean(torch.abs(s_b.detach() - s_b_from_cross))
             
-            aeloss_b = aeloss_b + style_b_loss
+            # content loss
+            c_a_from_cross, _ = model.encode_content(fakeB)
+            _, quant_c_a = model.encode_content(dataA)
+            content_a_loss = torch.mean(torch.abs(quant_c_a.detach() - c_a_from_cross))
+            
+            aeloss_b = aeloss_b + 0.3*(style_b_loss + content_a_loss)
             
             aeloss_b.backward()
             opt_ae.step()
@@ -205,22 +214,31 @@ if __name__ == "__main__":
             
             train_style_a_loss.append(style_a_loss.item())
             train_style_b_loss.append(style_b_loss.item())
+            
+            train_content_a_loss.append(content_a_loss.item())
+            train_content_b_loss.append(content_b_loss.item())
+            
 
-            if (i+1) % 100 == 0:
+            if (i+1) % 1000 == 0:
                 _rec  = 'epoch {}, {} iterations\n'.format(epoch, i+1)
                 _rec += '(A domain) ae_loss: {:8f}, disc_loss: {:8f}\n'.format(
-                            np.mean(train_ae_a_error[-100:]), np.mean(train_disc_a_error[-100:]))
+                            np.mean(train_ae_a_error[-1000:]), np.mean(train_disc_a_error[-1000:]))
                 _rec += '(B domain) ae_loss: {:8f}, disc_loss: {:8f}\n'.format(
-                            np.mean(train_ae_b_error[-100:]), np.mean(train_disc_b_error[-100:]))
+                            np.mean(train_ae_b_error[-1000:]), np.mean(train_disc_b_error[-1000:]))
                 _rec += 'A vs A2B loss: {:8f}, B vs B2A loss: {:8f}\n'.format(
-                            np.mean(train_disc_a2b_error[-100:]), np.mean(train_disc_b2a_error[-100:]))
+                            np.mean(train_disc_a2b_error[-1000:]), np.mean(train_disc_b2a_error[-1000:]))
                 _rec += 'recon_error: {:8f}\n\n'.format(
-                    np.mean(train_res_rec_error[-100:]))
+                    np.mean(train_res_rec_error[-1000:]))
                 
                 _rec += 'style_a_loss: {:8f}\n\n'.format(
-                    np.mean(train_style_a_loss[-100:]))
+                    np.mean(train_style_a_loss[-1000:]))
                 _rec += 'style_b_loss: {:8f}\n\n'.format(
-                    np.mean(train_style_b_loss[-100:]))
+                    np.mean(train_style_b_loss[-1000:]))
+                
+                _rec += 'content_a_loss: {:8f}\n\n'.format(
+                    np.mean(train_content_a_loss[-1000:]))
+                _rec += 'content_b_loss: {:8f}\n\n'.format(
+                    np.mean(train_content_b_loss[-1000:]))
                 
                 print(_rec)
                 with open(os.path.join(os.getcwd(), save_path, 'loss.txt'), 'a') as f:
