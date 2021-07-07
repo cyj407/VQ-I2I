@@ -60,7 +60,7 @@ if __name__ == "__main__":
     config.model.base_learning_rate = learning_rate
     config.model.params.embed_dim = ed
     config.model.params.n_embed = ne
-    config.model.z_channels = 128
+    config.model.z_channels = 256
     config.model.resolution = 256
     model = instantiate_from_config(config.model)
     if(os.path.isfile(f)):
@@ -134,33 +134,8 @@ if __name__ == "__main__":
             disc_a_loss = b2a_loss
             disc_a_loss.backward()
             opt_disc_a.step()
-
             
-            ## Generator A
-            opt_ae.zero_grad()
             
-            recA, qlossA, _ = model(dataA, label=1, cross=False)
-
-            aeloss_a, _ = model.loss_a(qlossA, dataA, recA, fake=fakeA, switch_weight=switch_weight, optimizer_idx=0, global_step=epoch,
-                                    last_layer=model.get_last_layer(label=1), split="train")
-            
-            AtoBtoA, _, s_a_from_cross = model(fakeA, label=1, cross=False)
-            
-            # style loss
-            style_a_loss = torch.mean(torch.abs(s_a.detach() - s_a_from_cross))
-            
-            # content loss
-            c_b_from_cross, _ = model.encode_content(fakeA)
-            _, quant_c_b = model.encode_content(dataB)
-            content_b_loss = torch.mean(torch.abs(quant_c_b.detach() - c_b_from_cross))
-            
-            aeloss_a = aeloss_a + 0.3*(style_a_loss + content_b_loss)
-            
-            aeloss_a.backward()
-            opt_ae.step()
-
-
-
             ## Discriminator B
             opt_disc_b.zero_grad()
             
@@ -174,15 +149,37 @@ if __name__ == "__main__":
             disc_b_loss.backward()
             opt_disc_b.step()
 
-
-            ## Generator B
+            
+            ## Generator 
             opt_ae.zero_grad()
             
+            # A reconstruction
+            recA, qlossA, _ = model(dataA, label=1, cross=False)
+
+            aeloss_a, _ = model.loss_a(qlossA, dataA, recA, fake=fakeA, switch_weight=switch_weight, optimizer_idx=0, global_step=epoch,
+                                    last_layer=model.get_last_layer(label=1), split="train")
+            
+            # cross path with style a
+            AtoBtoA, _, s_a_from_cross = model(fakeA, label=1, cross=False)
+            
+            # style loss
+            style_a_loss = torch.mean(torch.abs(s_a.detach() - s_a_from_cross))
+            
+            # content loss
+            c_b_from_cross, _ = model.encode_content(fakeA)
+            _, quant_c_b = model.encode_content(dataB)
+            content_b_loss = torch.mean(torch.abs(quant_c_b.detach() - c_b_from_cross))
+            
+            aeloss_a = aeloss_a + 0.3*content_b_loss + 0.1*style_a_loss 
+            
+            
+            # B reconstruction
             recB, qlossB, _ = model(dataB, label=0, cross=False)
 
             aeloss_b, _ = model.loss_b(qlossB, dataB, recB, fake=fakeB, switch_weight=switch_weight, optimizer_idx=0, global_step=epoch,
                                     last_layer=model.get_last_layer(label=0), split="train")
             
+            # cross path with style b
             BtoAtoB, _, s_b_from_cross = model(fakeB, label=0, cross=False)
             
             # style loss
@@ -193,9 +190,10 @@ if __name__ == "__main__":
             _, quant_c_a = model.encode_content(dataA)
             content_a_loss = torch.mean(torch.abs(quant_c_a.detach() - c_a_from_cross))
             
-            aeloss_b = aeloss_b + 0.3*(style_b_loss + content_a_loss)
+            aeloss_b = aeloss_b + 0.3*content_a_loss + 0.1*style_b_loss 
             
-            aeloss_b.backward()
+            gen_loss = aeloss_a + aeloss_b
+            gen_loss.backward()
             opt_ae.step()
             
 
