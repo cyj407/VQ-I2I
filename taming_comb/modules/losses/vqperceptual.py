@@ -136,7 +136,7 @@ class VQLPIPSWithDiscriminator(nn.Module):
             ### only switch decoder feed into disciminator
             disc_factor = adopt_weight(self.disc_factor, global_step, threshold=self.discriminator_iter_start)
             loss = nll_loss + g_loss * switch_weight + self.codebook_weight * codebook_loss.mean()
-            loss = nll_loss + d_weight * disc_factor * g_loss * switch_weight + self.codebook_weight * codebook_loss.mean()
+            loss = 10*nll_loss + d_weight * disc_factor * g_loss * switch_weight + self.codebook_weight * codebook_loss.mean()
 
             log = {"{}/total_loss".format(split): loss.clone().detach().mean(),
                    "{}/quant_loss".format(split): codebook_loss.detach().mean(),

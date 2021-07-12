@@ -36,7 +36,7 @@ if __name__ == "__main__":
     # ONLY MODIFY SETTING HERE
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     batch_size = 1 # 128
-    learning_rate = 1e-4        # 256/512 lr=4.5e-6 from 71 epochs
+    learning_rate = 1e-5        # 256/512 lr=4.5e-6 from 71 epochs
     ne = 128  # Enlarge
     ed = 256
     epoch_start = 1
@@ -45,7 +45,7 @@ if __name__ == "__main__":
     
     
     # save_path = 'both_afhq_{}_{}_rec_switch_img128'.format(ed, ne)    # model dir
-    save_path = 'afhq_{}_{}_settingc'.format(ed, ne)    # model dir
+    save_path = 'afhq_{}_{}_settingc_cross'.format(ed, ne)    # model dir
     print(save_path)
     root = '/home/jenny/VQVAE-CUT/dataset/afhq_cat2dog/'
 
@@ -151,7 +151,18 @@ if __name__ == "__main__":
 
             
             ## Generator 
+            # turn all the parameters of the three encoders on
+            for p in model.encoder.parameters():
+                p.requires_grad = True
+                
+            for p in model.style_enc_a.parameters():
+                p.requires_grad = True
+                
+            for p in model.style_enc_b.parameters():
+                p.requires_grad = True
+                
             opt_ae.zero_grad()
+                
             
             # A reconstruction
             recA, qlossA, _ = model(dataA, label=1, cross=False)
@@ -159,19 +170,7 @@ if __name__ == "__main__":
             aeloss_a, _ = model.loss_a(qlossA, dataA, recA, fake=fakeA, switch_weight=switch_weight, optimizer_idx=0, global_step=epoch,
                                     last_layer=model.get_last_layer(label=1), split="train")
             
-            # cross path with style a
-            AtoBtoA, _, s_a_from_cross = model(fakeA, label=1, cross=False)
-            
-            # style loss
-            style_a_loss = torch.mean(torch.abs(s_a.detach() - s_a_from_cross))
-            
-            # content loss
-            c_b_from_cross, _ = model.encode_content(fakeA)
-            _, quant_c_b = model.encode_content(dataB)
-            content_b_loss = torch.mean(torch.abs(quant_c_b.detach() - c_b_from_cross))
-            
-            aeloss_a = aeloss_a + 0.3*content_b_loss + 0.1*style_a_loss 
-            
+         
             
             # B reconstruction
             recB, qlossB, _ = model(dataB, label=0, cross=False)
@@ -179,22 +178,56 @@ if __name__ == "__main__":
             aeloss_b, _ = model.loss_b(qlossB, dataB, recB, fake=fakeB, switch_weight=switch_weight, optimizer_idx=0, global_step=epoch,
                                     last_layer=model.get_last_layer(label=0), split="train")
             
+         
+            
+            gen_loss = aeloss_a + aeloss_b
+            gen_loss.backward(retain_graph=True)
+            opt_ae.step()
+            
+            
+            
+            # turn off the parameters of all encoders when doing style loss bp
+            for p in model.encoder.parameters():
+                p.requires_grad = False
+                
+            for p in model.style_enc_a.parameters():
+                p.requires_grad = False
+                
+            for p in model.style_enc_b.parameters():
+                p.requires_grad = False     
+                
+            opt_ae.zero_grad()
+            
+            # cross path with style a
+            s_a = model.encode_style(dataA, label=1)
+            fakeA, _, _ = model(dataB, label=0, cross=True, s_given=s_a)
+            AtoBtoA, _, s_a_from_cross = model(fakeA, label=1, cross=False)
+            
+            # style_a loss
+            style_a_loss = torch.mean(torch.abs(s_a.detach() - s_a_from_cross))
+            
+            # content_b loss
+            c_b_from_cross, _ = model.encode_content(fakeA)
+            _, quant_c_b = model.encode_content(dataB)
+            content_b_loss = torch.mean(torch.abs(quant_c_b.detach() - c_b_from_cross))
+            
             # cross path with style b
+            s_b = model.encode_style(dataB, label=0)
+            fakeB, _, s_b_sampled = model(dataA, label=1, cross=True, s_given=s_b)
             BtoAtoB, _, s_b_from_cross = model(fakeB, label=0, cross=False)
             
-            # style loss
+            # style_b loss
             style_b_loss = torch.mean(torch.abs(s_b.detach() - s_b_from_cross))
             
-            # content loss
+            # content_a loss
             c_a_from_cross, _ = model.encode_content(fakeB)
             _, quant_c_a = model.encode_content(dataA)
             content_a_loss = torch.mean(torch.abs(quant_c_a.detach() - c_a_from_cross))
             
-            aeloss_b = aeloss_b + 0.3*content_a_loss + 0.1*style_b_loss 
-            
-            gen_loss = aeloss_a + aeloss_b
-            gen_loss.backward()
+            cross_loss = 0.1*(style_a_loss + style_b_loss) + 0.5*(content_a_loss + content_b_loss)
+            cross_loss.backward()
             opt_ae.step()
+            
             
 
             # compute mse loss b/w input and reconstruction
