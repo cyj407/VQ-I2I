@@ -194,34 +194,28 @@ class dataset_combine(data.Dataset):
         return data_variance
 
 
-class dataset_all(data.Dataset):
+class dataset_pair(data.Dataset):
     def __init__(self, root, mode, resize=256, cropsize=256):
         self.root = root
+        self.mode = mode
+        # a
+        images_a = os.listdir(os.path.join(self.root, mode + 'A'))
+        self.A = [x for x in images_a]
+        self.A_size = len(self.A)
 
-        images_a = os.listdir(os.path.join(self.root, mode + 'A'))  # 1231
-        images_b = os.listdir(os.path.join(self.root, mode + 'B'))  # 962
-        A = [os.path.join(self.root, mode + 'A', x) for x in images_a]
-        B = [os.path.join(self.root, mode + 'B', x) for x in images_b]
-        self.imgs = A + B
+        self.dataset_size = len(self.A)
 
-        # 0 represents class A, 1 represents class B
-        # labels = [0] * len(images_a) + [1] * len(images_b)
-        # labels = torch.Tensor(labels)
-        # self.labels = labels
+        self.input_dim_A = 3
+        self.input_dim_B = 3
 
-        self.A_size = len(A)
-        self.B_size = len(B)
-        self.dataset_size = len(self.imgs)
-        self.input_dim = 3
-
-        # resize size
+        ## resize size
         transforms = [Resize((resize, resize), Image.BICUBIC)]
         if(mode == 'train'):
             transforms.append(RandomCrop(cropsize))
         else:
             transforms.append(CenterCrop(cropsize))
 
-        # flip
+        ## flip
         transforms.append(RandomHorizontalFlip())
 
         transforms.append(ToTensor())
@@ -230,38 +224,24 @@ class dataset_all(data.Dataset):
         return
 
     def __getitem__(self, index):
-        return self.load_img(self.imgs[index], self.input_dim)#, self.labels[index]
+        A = os.path.join(self.root, self.mode + 'A', self.A[index])
+        data_A = self.load_img(A, self.input_dim_A)
+
+        B = os.path.join(self.root, self.mode + 'B', self.A[index][:-5] + 'B' + '.jpg')
+        data_B = self.load_img(B, self.input_dim_B)
+
+      
+        return data_A, data_B  
 
     def __len__(self):
-        return len(self.imgs)
+        return self.dataset_size
 
     def load_img(self, img_name, input_dim):
         img = Image.open(img_name).convert('RGB')
         img = self.transforms(img)
         if(input_dim == 1):
-            img = img[0, ...] * 0.299 + img[1, ...] * \
-                0.587 + img[2, ...] * 0.114
+            img = img[0, ...] * 0.299 + img[1, ...] * 0.587 + img[2, ...] * 0.114
             img = img.unsqueeze(0)
         return img
-
-    def var(self):
-        # np_a = []
-        # np_b = []
-        np_imgs = []    # (dataset_size, 3, H, W)
-        for i in range(len(self.imgs)):
-            img = self.load_img(self.imgs[i], self.input_dim)
-            np_imgs.append(np.array(img))
-            # if(i < self.A_size):
-            #     np_a.append(np.array(img))
-            # else:
-            #     np_b.append(np.array(img))
-        print(np.array(np_imgs).mean())
-        data_variance = np.var( np.array(np_imgs) / 255.0)
-        # var_a = np.var( np.array(np_a) / 255.0)
-        # var_b = np.var( np.array(np_b) / 255.0)
-        # print(var_a)
-        # print(var_b)
-        return data_variance
-
 
 
