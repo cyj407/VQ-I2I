@@ -1,0 +1,49 @@
+model:
+  base_learning_rate: 4.5e-06
+  target: taming_comb.models.cond_transformer.Net2NetTransformer
+  params:
+    cond_stage_key: coord
+    transformer_config:
+      target: taming_comb.modules.transformer.mingpt.GPT
+      params:
+        vocab_size: 512
+        block_size: 512
+        n_layer: 24
+        n_head: 16
+        n_embd: 512
+
+    first_stage_model_config:
+      target: taming_comb.models.vqgan.VQModelCrossGAN_ADAIN
+      params:
+        embed_dim: 256
+        n_embed: 256
+        ddconfig:
+          double_z: False
+          z_channels: 256
+          resolution: 256
+          in_channels: 3
+          out_ch: 3
+          ch: 128
+          ch_mult: [ 1,1,2,2,4]  # num_down = len(ch_mult)-1
+          num_res_blocks: 2
+          attn_resolutions: [16]
+          dropout: 0.0
+        lossconfig:
+          target: taming_comb.modules.losses.vqperceptual.VQLPIPSWithDiscriminator
+          params:
+            disc_conditional: False
+            disc_in_channels: 3
+            disc_start: 0 #301
+            disc_factor: 1.0 #0.8 / 0.3
+            disc_weight: 0.1 # 0.5 / 0.8
+            codebook_weight: 1.0
+
+    cond_stage_config:
+      target: taming_comb.modules.misc.coord.CoordStage
+      params:
+        n_embed: 512
+        down_factor: 16
+
+    f_path: None
+    device: '0'
+

@@ -1,9 +1,22 @@
 import os, math
 import torch
 import torch.nn.functional as F
-import pytorch_lightning as pl
+import torch.nn as nn
+import argparse, os, sys, datetime, glob, importlib
 
-from main import instantiate_from_config
+
+def get_obj_from_str(string, reload=False):
+    module, cls = string.rsplit(".", 1)
+    if reload:
+        module_imp = importlib.import_module(module)
+        importlib.reload(module_imp)
+    return getattr(importlib.import_module(module, package=None), cls)
+
+
+def instantiate_from_config(config):
+    if not "target" in config:
+        raise KeyError("Expected key `target` to instantiate.")
+    return get_obj_from_str(config["target"])(**config.get("params", dict()))
 
 
 def disabled_train(self, mode=True):
@@ -12,9 +25,11 @@ def disabled_train(self, mode=True):
     return self
 
 
-class Net2NetTransformer(pl.LightningModule):
-    def __init__(self, transformer_config, first_stage_config,
-                 cond_stage_config, permuter_config=None,
+class Net2NetTransformer(nn.Module):
+    #f = None
+    #device = '0'
+    def __init__(self, transformer_config, first_stage_model_config,
+                 cond_stage_config, f_path, device, permuter_config=None,
                  ckpt_path=None, ignore_keys=[],
                  first_stage_key="image",
                  cond_stage_key="depth",
@@ -22,7 +37,10 @@ class Net2NetTransformer(pl.LightningModule):
                  pkeep=1.0):
 
         super().__init__()
-        self.init_first_stage_from_ckpt(first_stage_config)
+
+        self.f_path = f_path
+        self.device = device
+        self.init_first_stage_from_ckpt(first_stage_model_config)
         self.init_cond_stage_from_ckpt(cond_stage_config)
         if permuter_config is None:
             permuter_config = {"target": "taming.modules.transformer.permuter.Identity"}
@@ -48,6 +66,10 @@ class Net2NetTransformer(pl.LightningModule):
 
     def init_first_stage_from_ckpt(self, config):
         model = instantiate_from_config(config)
+        if(os.path.isfile(self.f_path)):
+            print('load ' + self.f_path)
+            ck = torch.load(self.f_path, map_location=self.device)
+            model.load_state_dict(ck['model_state_dict'], strict=False)
         model = model.eval()
         model.train = disabled_train
         self.first_stage_model = model
@@ -58,10 +80,11 @@ class Net2NetTransformer(pl.LightningModule):
         model.train = disabled_train
         self.cond_stage_model = model
 
-    def forward(self, x, c):
+    #def forward(self, x, c):
+    def forward(self, x, label):
         # one step to produce the logits
-        _, z_indices = self.encode_to_z(x)
-        _, c_indices = self.encode_to_c(c)
+        _, z_indices = self.encode_to_z(x, label)
+        #_, c_indices = self.encode_to_c(c)
 
         if self.training and self.pkeep < 1.0:
             mask = torch.bernoulli(self.pkeep*torch.ones(z_indices.shape,
@@ -72,15 +95,15 @@ class Net2NetTransformer(pl.LightningModule):
         else:
             a_indices = z_indices
 
-        cz_indices = torch.cat((c_indices, a_indices), dim=1)
+        #cz_indices = torch.cat((c_indices, a_indices), dim=1)
 
         # target includes all sequence elements (no need to handle first one
         # differently because we are conditioning)
         target = z_indices
         # make the prediction
-        logits, _ = self.transformer(cz_indices[:, :-1])
+        logits, _ = self.transformer(a_indices)#[:, :-1]
         # cut off conditioning outputs - output i corresponds to p(z_i | z_{<i}, c)
-        logits = logits[:, c_indices.shape[1]-1:]
+        #logits = logits[:, c_indices.shape[1]-1:]
 
         return logits, target
 
@@ -147,8 +170,9 @@ class Net2NetTransformer(pl.LightningModule):
         return x
 
     @torch.no_grad()
-    def encode_to_z(self, x):
-        quant_z, _, info = self.first_stage_model.encode(x)
+    def encode_to_z(self, x, label):
+        quant_z, _, info, _ = self.first_stage_model.encode(x, label)
+        #_, quant_z = self.first_stage_model.encode_content(x)
         indices = info[2].view(quant_z.shape[0], -1)
         indices = self.permuter(indices)
         return quant_z, indices
@@ -259,8 +283,8 @@ class Net2NetTransformer(pl.LightningModule):
             c = c[:N]
         return x, c
 
-    def shared_step(self, batch, batch_idx):
-        x, c = self.get_xc(batch)
+    '''def shared_step(self, batch, batch_idx):
+        #x, c = self.get_xc(batch)
         logits, target = self(x, c)
         loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), target.reshape(-1))
         return loss
@@ -319,4 +343,4 @@ class Net2NetTransformer(pl.LightningModule):
             {"params": [param_dict[pn] for pn in sorted(list(no_decay))], "weight_decay": 0.0},
         ]
         optimizer = torch.optim.AdamW(optim_groups, lr=self.learning_rate, betas=(0.9, 0.95))
-        return optimizer
+        return optimizer'''
