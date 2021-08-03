@@ -171,11 +171,11 @@ class Net2NetTransformer(nn.Module):
 
     @torch.no_grad()
     def encode_to_z(self, x, label):
-        quant_z, _, info, _ = self.first_stage_model.encode(x, label)
+        quant_z, _, info, style = self.first_stage_model.encode(x, label)
         #_, quant_z = self.first_stage_model.encode_content(x)
         indices = info[2].view(quant_z.shape[0], -1)
         indices = self.permuter(indices)
-        return quant_z, indices
+        return quant_z, indices, style
 
     @torch.no_grad()
     def encode_to_c(self, c):
@@ -186,12 +186,15 @@ class Net2NetTransformer(nn.Module):
         return quant_c, indices
 
     @torch.no_grad()
-    def decode_to_img(self, index, zshape):
+    def decode_to_img(self, index, zshape, style, label):
         index = self.permuter(index, reverse=True)
         bhwc = (zshape[0],zshape[2],zshape[3],zshape[1])
         quant_z = self.first_stage_model.quantize.get_codebook_entry(
             index.reshape(-1), shape=bhwc)
-        x = self.first_stage_model.decode(quant_z)
+        if label == 1:
+            x = self.first_stage_model.decode_a(quant_z, style)
+        else:
+            x = self.first_stage_model.decode_b(quant_z, style)
         return x
 
     @torch.no_grad()
