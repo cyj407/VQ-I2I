@@ -215,7 +215,11 @@ class dataset_pair(data.Dataset):
         else:
             transforms.append(CenterCrop(cropsize))
 
-     
+        self.hflip = 0.0
+        if self.hflip > 0.5:
+            transforms.append(RandomHorizontalFlip(p=1.0))
+
+
 
         transforms.append(ToTensor())
         transforms.append(Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]))
@@ -223,11 +227,14 @@ class dataset_pair(data.Dataset):
         return
 
     def __getitem__(self, index):
+
+        flip_or_not = random.random()
+
         A = os.path.join(self.root, self.mode + 'A', self.A[index])
-        data_A = self.load_img(A, self.input_dim_A)
+        data_A = self.load_img(A, self.input_dim_A, flip_or_not)
 
         B = os.path.join(self.root, self.mode + 'B', self.A[index][:-5] + 'B' + '.jpg')
-        data_B = self.load_img(B, self.input_dim_B)
+        data_B = self.load_img(B, self.input_dim_B, flip_or_not)
 
       
         return data_A, data_B  
@@ -235,7 +242,10 @@ class dataset_pair(data.Dataset):
     def __len__(self):
         return self.dataset_size
 
-    def load_img(self, img_name, input_dim):
+    def load_img(self, img_name, input_dim, flip_or_not):
+        #flip
+        self.hflip = flip_or_not
+
         img = Image.open(img_name).convert('RGB')
         img = self.transforms(img)
         if(input_dim == 1):
