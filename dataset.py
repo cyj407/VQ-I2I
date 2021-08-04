@@ -195,7 +195,7 @@ class dataset_combine(data.Dataset):
 
 
 class dataset_pair(data.Dataset):
-    def __init__(self, root, mode, resize=256, cropsize=256):
+    def __init__(self, root, mode, resize=256, cropsize=256, hflip=0.0):
         self.root = root
         self.mode = mode
         # a
@@ -215,15 +215,23 @@ class dataset_pair(data.Dataset):
         else:
             transforms.append(CenterCrop(cropsize))
 
-        self.hflip = 0.0
-        if self.hflip > 0.5:
-            transforms.append(RandomHorizontalFlip(p=1.0))
-
-
+        # flip
+        transforms.append(RandomHorizontalFlip(p=1.0))
 
         transforms.append(ToTensor())
         transforms.append(Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]))
         self.transforms = Compose(transforms)
+
+        # transform without flipping
+        transforms_no_flip = [Resize((resize, resize), Image.BICUBIC)]
+        if(mode == 'train'):
+            transforms_no_flip.append(RandomCrop(cropsize))
+        else:
+            transforms_no_flip.append(CenterCrop(cropsize))
+
+        transforms_no_flip.append(ToTensor())
+        transforms_no_flip.append(Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]))
+        self.transforms_no_flip = Compose(transforms_no_flip)
         return
 
     def __getitem__(self, index):
@@ -244,10 +252,14 @@ class dataset_pair(data.Dataset):
 
     def load_img(self, img_name, input_dim, flip_or_not):
         #flip
-        self.hflip = flip_or_not
 
         img = Image.open(img_name).convert('RGB')
-        img = self.transforms(img)
+
+        if flip_or_not > 0.5:
+            img = self.transforms(img)
+        else:
+            img = self.transforms_no_flip(img)
+        
         if(input_dim == 1):
             img = img[0, ...] * 0.299 + img[1, ...] * 0.587 + img[2, ...] * 0.114
             img = img.unsqueeze(0)
