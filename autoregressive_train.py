@@ -151,31 +151,40 @@ if __name__ == "__main__":
     
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
     
-    loss_a = []
-    loss_b = []
+    train_loss_a = []
+    train_loss_b = []
     
+
+
     for epoch in range(epoch_start, epoch_end+1):
         for i in range(iterations):
 
             dataA, dataB = next(iter(train_loader))
             dataA, dataB = dataA.to(device), dataB.to(device)
 
-            # dataA
+        
             opt_transformer.zero_grad()
-            #x, c = model.get_xc(dataA)
-            logits, target = model(dataA, 1)
-            loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), target.reshape(-1))
-            loss_a.append(loss.item())
-            loss.backward()
-            opt_transformer.step()
+
+            coordinate = np.arange(img_size*img_size).reshape(img_size,img_size,1)/(img_size*img_size)
+            coordinate = torch.from_numpy(coordinate)
+            c = model.get_c(coordinate)
+            c = c.to(device)
+
+
+            # dataA
+            logits, target = model(dataA, c, 1)
+            loss_a = F.cross_entropy(logits.reshape(-1, logits.size(-1)), target.reshape(-1))
+            train_loss_a.append(loss_a.item())
+            loss_a.backward()
+        
 
             # dataB
-            opt_transformer.zero_grad()
-            #x, c = model.get_xc(dataB)
-            logits, target = model(dataB, 0)
-            loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), target.reshape(-1))
-            loss_b.append(loss.item())
-            loss.backward()
+            logits, target = model(dataB, c, 0)
+            loss_b = F.cross_entropy(logits.reshape(-1, logits.size(-1)), target.reshape(-1))
+            train_loss_b.append(loss_b.item())
+            loss_b.backward()
+
+
             opt_transformer.step()
             
             
@@ -183,7 +192,7 @@ if __name__ == "__main__":
             if (i+1) % 1000 == 0:
                 _rec  = 'epoch {}, {} iterations\n'.format(epoch, i+1)
                 _rec += 'a loss: {:8f}, b loss: {:8f}\n'.format(
-                            np.mean(loss_a[-1000:]), np.mean(loss_b[-1000:]))
+                            np.mean(train_loss_a[-1000:]), np.mean(train_loss_b[-1000:]))
     
                 print(_rec)
                 with open(os.path.join(os.getcwd(), save_path, 'loss.txt'), 'a') as f:

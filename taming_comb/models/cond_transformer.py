@@ -81,10 +81,10 @@ class Net2NetTransformer(nn.Module):
         self.cond_stage_model = model
 
     #def forward(self, x, c):
-    def forward(self, x, label):
+    def forward(self, x, c, label):
         # one step to produce the logits
-        _, z_indices = self.encode_to_z(x, label)
-        #_, c_indices = self.encode_to_c(c)
+        _, z_indices,_ = self.encode_to_z(x, label)
+        _, c_indices = self.encode_to_c(c)
 
         if self.training and self.pkeep < 1.0:
             mask = torch.bernoulli(self.pkeep*torch.ones(z_indices.shape,
@@ -95,15 +95,18 @@ class Net2NetTransformer(nn.Module):
         else:
             a_indices = z_indices
 
-        #cz_indices = torch.cat((c_indices, a_indices), dim=1)
+        #print('c: ', c_indices)
+        #print('z: ', a_indices.shape)
+
+        cz_indices = torch.cat((c_indices, a_indices), dim=1)
 
         # target includes all sequence elements (no need to handle first one
         # differently because we are conditioning)
         target = z_indices
         # make the prediction
-        logits, _ = self.transformer(a_indices)#[:, :-1]
+        logits, _ = self.transformer(cz_indices[:, :-1])#[:, :-1]
         # cut off conditioning outputs - output i corresponds to p(z_i | z_{<i}, c)
-        #logits = logits[:, c_indices.shape[1]-1:]
+        logits = logits[:, c_indices.shape[1]-1:]
 
         return logits, target
 
@@ -277,6 +280,17 @@ class Net2NetTransformer(nn.Module):
         if x.dtype == torch.double:
             x = x.float()
         return x
+
+    def get_c(self, c_init):
+        c = c_init
+        if len(c.shape) == 3:
+            c = c[..., None]
+        #c = c.permute(0, 3, 1, 2).to(memory_format=torch.contiguous_format)
+        c = c.permute(2, 3, 0, 1).to(memory_format=torch.contiguous_format)
+        if c.dtype == torch.double:
+            c = c.float()
+        return c
+
 
     def get_xc(self, batch, N=None):
         x = self.get_input(self.first_stage_key, batch)
