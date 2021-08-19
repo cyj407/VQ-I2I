@@ -22,7 +22,7 @@ taming*/
 
 # add config file by `git add -f [config.yaml]`
 *.yaml
-
+*pt
 *.sh
 *.ipynb
 *.txt
