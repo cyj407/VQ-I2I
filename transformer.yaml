@@ -15,8 +15,8 @@ model:
     first_stage_model_config:
       target: taming_comb.models.vqgan.VQModelCrossGAN_ADAIN
       params:
-        embed_dim: 256
-        n_embed: 256
+        embed_dim: 512
+        n_embed: 512
         ddconfig:
           double_z: False
           z_channels: 256
