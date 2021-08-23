@@ -43,7 +43,7 @@ class Net2NetTransformer(nn.Module):
         self.init_first_stage_from_ckpt(first_stage_model_config)
         self.init_cond_stage_from_ckpt(cond_stage_config)
         if permuter_config is None:
-            permuter_config = {"target": "taming.modules.transformer.permuter.Identity"}
+            permuter_config = {"target": "taming_comb.modules.transformer.permuter.Identity"}
         self.permuter = instantiate_from_config(config=permuter_config)
         self.transformer = instantiate_from_config(config=transformer_config)
 
