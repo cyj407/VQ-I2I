@@ -169,7 +169,10 @@ if __name__ == "__main__":
             coordinate = torch.from_numpy(coordinate)
             c = model.get_c(coordinate)
             c = c.to(device)
+            #print(c)
 
+            #print(c.shape)
+            #print(dataA.shape)
 
             # dataA
             logits, target = model(dataA, c, 1)

@@ -121,9 +121,9 @@ class VQLPIPSWithDiscriminator(nn.Module):
             d_weight = torch.tensor(1.0)
 
             ### self-reconstruction also feed into discriminator
-            '''logits_fake = self.discriminator(reconstructions.contiguous())
+            logits_fake = self.discriminator(reconstructions.contiguous())
             g_rec_loss = -torch.mean(logits_fake)
-            try:
+            '''try:
                 d_weight = self.calculate_adaptive_weight(nll_loss, g_rec_loss, last_layer=last_layer)
             except RuntimeError:
                 assert not self.training
@@ -135,9 +135,10 @@ class VQLPIPSWithDiscriminator(nn.Module):
 
             ### only switch decoder feed into disciminator
             disc_factor = adopt_weight(self.disc_factor, global_step, threshold=self.discriminator_iter_start)
-            loss = nll_loss + g_loss * switch_weight + self.codebook_weight * codebook_loss.mean()
-            loss = 10*nll_loss + d_weight * disc_factor * g_loss * switch_weight + self.codebook_weight * codebook_loss.mean()
+            loss = 5*nll_loss + (1.0*g_loss + 0.2*g_rec_loss) * switch_weight + self.codebook_weight * codebook_loss.mean()
+            #loss = 10*nll_loss + d_weight * disc_factor * g_loss * switch_weight + self.codebook_weight * codebook_loss.mean() + g_rec_loss
 
+            
             log = {"{}/total_loss".format(split): loss.clone().detach().mean(),
                    "{}/quant_loss".format(split): codebook_loss.detach().mean(),
                    "{}/nll_loss".format(split): nll_loss.detach().mean(),

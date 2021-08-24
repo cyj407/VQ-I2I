@@ -1,12 +1,33 @@
-"""This module contains simple helper functions """
 from __future__ import print_function
 import torch
 import numpy as np
 from PIL import Image
 import os
-from dataset import dataset_single, dataset_unpair
+from dataset import dataset_single
 from torch.utils.data import DataLoader
+import sys
+import matplotlib.pyplot as plt
+np.set_printoptions(threshold=sys.maxsize)
+from torchvision.utils import make_grid
+import matplotlib as mpl
+import importlib
+mpl.rcParams.update({'figure.max_open_warning': 0})
 
+from taming_comb.modules.style_encoder.network import *
+from taming_comb.modules.diffusionmodules.model import * 
+
+def get_obj_from_str(string, reload=False):
+    module, cls = string.rsplit(".", 1)
+    if reload:
+        module_imp = importlib.import_module(module)
+        importlib.reload(module_imp)
+    return getattr(importlib.import_module(module, package=None), cls)
+
+
+def instantiate_from_config(config):
+    if not "target" in config:
+        raise KeyError("Expected key `target` to instantiate.")
+    return get_obj_from_str(config["target"])(**config.get("params", dict()))
 
 def tensor2im(input_image, imtype=np.uint8):
     """"Converts a Tensor array into a numpy image array.
@@ -51,16 +72,16 @@ def save_image(image_numpy, image_path, aspect_ratio=1.0):
 
 def load_eval_model(_path, config_file, ed, ne, target, img_size):
     from omegaconf import OmegaConf
-    from main_setting_a import get_obj_from_str, instantiate_from_config
     config = OmegaConf.load(config_file)
     # print(config.model.params.n_embed)
     config.model.target = target
-    config.model.z_channels = img_size
+    config.model.z_channels = 128
     config.model.resolution = img_size
     config.model.params.n_embed = ne
     config.model.params.embed_dim = ed
     model_a = instantiate_from_config(config.model)
     ck = torch.load(_path, map_location=device)
+    print(_path)
     model_a.load_state_dict(ck['model_state_dict'], strict=False)
     model_a = model_a.to(device)
     return model_a.eval()
@@ -68,39 +89,53 @@ def load_eval_model(_path, config_file, ed, ne, target, img_size):
 
 def save_tensor(im_data, image_dir, image_name):
     im = tensor2im(im_data)
-    save_path = os.path.join(os.getcwd(), 'res', image_dir, str(image_name) + '.png')
+    save_path = os.path.join(os.getcwd(), 'res', image_dir, str(image_name)) #+ '.png'
     save_image(im, save_path)
 
 
-device = torch.device('cuda:0')
+device = torch.device('cuda:1' if torch.cuda.is_available() else "cpu")
+
 
 
 if __name__ == "__main__":
 
     # dataloader
-    root = '/eva_data/yujie/datasets/afhq'
-    _class = 'A'
-    epochs = [330, 380, 420]
-    # epochs = [i for i in range(260, 280, 20)]
+    root = '/home/jenny870207/data/afhq_cat2dog'
+
     mode = 'test'   # or 'train'
     config = 'config_comb.yaml'    
     ed = 256
-    ne = 512
-    img_size = 128
-    validation_data = dataset_single(root, mode, _class, img_size, img_size, flip=False)
-    model_name = 'both_afhq_{}_{}_rec_switch_img{}'.format(ed, ne, img_size)
-    save_name = 'half_img{}_{}{}_{}_{}_a2b'.format( img_size, mode, _class, ed, ne)
+    ne = 256
+    img_size = 256
+
+    validation_data_a = dataset_single(root, mode, 'A', img_size, img_size, flip=False)
+    validation_data_b = dataset_single(root, mode, 'C', img_size, img_size, flip=False)
+
+  
+    save_name = 'test_cat2wild_ed{}ne_{}_imgsize{}'.format(ed, ne, img_size)
     # model_name = 'both_afhq_{}_{}_2gloss_1dloss_img{}'.format(ed, ne, img_size)
     # save_name = '2g1d_img{}_{}{}_{}_{}_b2a'.format( img_size, mode, _class, ed, ne)
     # model_name = 'both_horse2zebra_{}_{}_2gloss_1dloss_img{}'.format(ed, ne, img_size)
     # save_name = '2g1d_img{}_hz_{}{}_{}_{}_rec'.format( img_size, mode, _class, ed, ne)
     
 
-    model_list = []
+    '''model_list = []
     for epoch in epochs:
         m_inorm_path = os.path.join(os.getcwd(), model_name, 'vqgan_{}.pt'.format(epoch))
         m_inorm = load_eval_model(m_inorm_path, config, ed, ne, 'taming_comb.models.vqgan.VQModelCrossGAN', img_size)
-        model_list.append(m_inorm)
+        model_list.append(m_inorm)'''
+
+    ed = 256
+    ne = 256
+    img_size = 256
+    #model_name = 'portrait_{}_{}_settingc_{}'.format(ed, ne, img_size)
+    model_name = 'afhq_cat2dog_{}_{}_cat2wild_{}'.format(ed, ne, img_size)
+    #model_name = 'cityscapes_{}_{}_pair'.format(ed, ne)
+
+    epoch = 'latest'
+    m_path = os.path.join(os.getcwd(), model_name, 'settingc_{}.pt'.format(epoch))
+    config = 'config_comb.yaml'
+    m = load_eval_model(m_path, config, ed, ne, 'taming_comb.models.vqgan.VQModelCrossGAN_ADAIN', img_size)
 
     ############################
     
@@ -110,35 +145,44 @@ if __name__ == "__main__":
     # if(not os.path.isdir(os.path.join(os.getcwd(), 'res', 'originalsa'))):
     #     os.mkdir(os.path.join(os.getcwd(), 'res', 'originalsa'))
         
-    for epoch, _m in zip(epochs, model_list):
-        save_dir = '{}_{}'.format(save_name, epoch)
-        print(save_dir)
-        if(not os.path.isdir(os.path.join(os.getcwd(), 'res', save_dir))):
-            os.mkdir(os.path.join(os.getcwd(), 'res', save_dir))
-    
+    save_dir_a = '{}_{}_a'.format(save_name, epoch)
+    save_dir_b = '{}_{}_b'.format(save_name, epoch)
+
+    if(not os.path.isdir(os.path.join(os.getcwd(), 'res', save_dir_a))):
+        os.mkdir(os.path.join(os.getcwd(), 'res', save_dir_a))
+    if(not os.path.isdir(os.path.join(os.getcwd(), 'res', save_dir_b))):
+        os.mkdir(os.path.join(os.getcwd(), 'res', save_dir_b))
+
+
     
     # data loader
-    test_loader = DataLoader(validation_data, batch_size=1, shuffle=False, pin_memory=True)
+    test_loader_a = DataLoader(validation_data_a, batch_size=1, shuffle=True, pin_memory=True)
+    test_loader_b = DataLoader(validation_data_b, batch_size=1, shuffle=True, pin_memory=True)
     
-    test_img_name = validation_data.get_img_name()
+    test_img_name = validation_data_a.get_img_name()
     
-    for i, data in enumerate(test_loader):
-        # print(data.shape)   # (1, 3, 256, 256)
+    print(len(test_img_name))
 
-        data = data.to(device)
+    for i in range(len(test_img_name)):
         
-        for epoch, _m in zip(epochs, model_list):
+        data_A = next(iter(test_loader_a))
+        data_B = next(iter(test_loader_b))
+        
+        data_A = data_A.to(device)
+        data_B = data_B.to(device)
 
-            # forward
-            quant, _, _ = _m.encode(data)
-            xrec_in = _m.decode_b(quant)
-            
-            img_name = test_img_name[i].rsplit('/', 1)[-1]
-            # save_name = os.path.join(save_name, image_name)
+        # forward
+        s_a = m.encode_style(data_A, label=1)
+        s_b = m.encode_style(data_B, label=0)
+        BcAs, _, _ = m(data_B, label=0, cross=True, s_given=s_a)
+        AcBs, _, _ = m(data_A, label=1, cross=True, s_given=s_b)
 
-            save_dir = '{}_{}'.format(save_name, epoch)                
-            save_tensor(xrec_in, save_dir, img_name)
-               
-        # save_tensor(data, 'originalsa', i)
-        print(i)
+        #print(test_img_name[i])
+        img_name = test_img_name[i].rsplit('/', 1)[-1]
+        # save_name = os.path.join(save_name, image_name)
+                
+        save_tensor(BcAs, save_dir_a, img_name)
+        save_tensor(AcBs, save_dir_b, img_name)
+
+    
     

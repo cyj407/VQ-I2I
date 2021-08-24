@@ -97,7 +97,7 @@ class VQModel_ADAIN(nn.Module):
 
     def decode_a(self, quant, style_a):
         # decode content and style codes to an image
-        # self.mlp_a = self.mlp_a.to(style_a.device)
+        self.mlp_a = self.mlp_a.to(style_a.device)
         adain_params = self.mlp_a(style_a)
         self.assign_adain_params(adain_params, self.decoder_a)
  
@@ -109,7 +109,7 @@ class VQModel_ADAIN(nn.Module):
 
     def decode_b(self, quant, style_b):
         # decode content and style codes to an image
-        # self.mlp_b = self.mlp_b.to(style_b.device)
+        self.mlp_b = self.mlp_b.to(style_b.device)
         adain_params = self.mlp_b(style_b)
         self.assign_adain_params(adain_params, self.decoder_b)
         

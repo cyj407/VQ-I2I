@@ -13,6 +13,8 @@ import os
 from taming_comb.modules.style_encoder.network import *
 from taming_comb.modules.diffusionmodules.model import * 
 
+import argparse
+
 def get_obj_from_str(string, reload=False):
     module, cls = string.rsplit(".", 1)
     if reload:
@@ -28,29 +30,66 @@ def instantiate_from_config(config):
     return get_obj_from_str(config["target"])(**config.get("params", dict()))
 
 
-os.environ["CUDA_VISIBLE_DEVICES"]='0'
+
 
 
 if __name__ == "__main__":
 
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("device",
+                    help="specify the GPU(s)",
+                    type=str)
+
+    parser.add_argument("dataset",
+                    help="dataset",
+                    type=str)
+    
+    parser.add_argument("ne",
+                    help="the number of embedding",
+                    type=int)
+
+    parser.add_argument("ed",
+                    help="embedding dimension",
+                    type=int)
+
+    parser.add_argument("z_channel",
+                    help="z channel",
+                    type=int)
+    
+
+    parser.add_argument("epoch_start",
+                    help="start from",
+                    type=int)
+
+    parser.add_argument("epoch_end",
+                    help="end at",
+                    type=int)
+
+    args = parser.parse_args()
+
+    os.environ["CUDA_VISIBLE_DEVICES"]=args.device
+
     # ONLY MODIFY SETTING HERE
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
+    print('device: ', device)
     batch_size = 1 # 128
-    learning_rate = 1e-5        # 256/512 lr=4.5e-6 from 71 epochs
-    ne = 128  # Enlarge
-    ed = 256
-    epoch_start = 1
-    epoch_end = 150
+    learning_rate = 1e-5       # 256/512 lr=4.5e-6 from 71 epochs
+    ne = args.ne  # Enlarge
+    ed = args.ed
+    img_size = 256
+    epoch_start = args.epoch_start
+    epoch_end = args.epoch_end
     switch_weight = 0.1 # self-reconstruction : a2b/b2a = 10 : 1
     
     
     # save_path = 'both_afhq_{}_{}_rec_switch_img128'.format(ed, ne)    # model dir
-    save_path = 'afhq_{}_{}_settingc_cross'.format(ed, ne)    # model dir
+    save_path = args.dataset + '_{}_{}_settingc_{}'.format(ed, ne, img_size)    # model dir
     print(save_path)
-    root = '/home/jenny/VQVAE-CUT/dataset/afhq_cat2dog/'
+    root = '/home/jenny870207/data/' + args.dataset + '/'
 
     # load data
-    train_data = dataset_unpair(root, 'train', 128, 128)
+    train_data = dataset_unpair(root, 'train', 'A', 'B', img_size, img_size)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True)
 
 
@@ -60,7 +99,7 @@ if __name__ == "__main__":
     config.model.base_learning_rate = learning_rate
     config.model.params.embed_dim = ed
     config.model.params.n_embed = ne
-    config.model.z_channels = 256
+    config.model.z_channels = args.z_channel
     config.model.resolution = 256
     model = instantiate_from_config(config.model)
     if(os.path.isfile(f)):
@@ -115,6 +154,10 @@ if __name__ == "__main__":
 
     iterations = len(train_data) // batch_size
     iterations = iterations + 1 if len(train_data) % batch_size != 0 else iterations
+    
+    
+    torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    
     for epoch in range(epoch_start, epoch_end+1):
         for i in range(iterations):
 
@@ -127,11 +170,16 @@ if __name__ == "__main__":
             
             s_a = model.encode_style(dataA, label=1)
             fakeA, _, _ = model(dataB, label=0, cross=True, s_given=s_a)
+
+            recA, qlossA, _ = model(dataA, label=1, cross=False)
             
             b2a_loss, log = model.loss_a(_, dataA, fakeA, optimizer_idx=1, global_step=epoch,
                                     last_layer=None, split="train")
+
+            a_rec_d_loss, _ = model.loss_a(_, dataA, recA, optimizer_idx=1, global_step=epoch,
+                                    last_layer=None, split="train")
             
-            disc_a_loss = b2a_loss
+            disc_a_loss = b2a_loss + 0.2*a_rec_d_loss
             disc_a_loss.backward()
             opt_disc_a.step()
             
@@ -141,91 +189,66 @@ if __name__ == "__main__":
             
             s_b = model.encode_style(dataB, label=0)
             fakeB, _, s_b_sampled = model(dataA, label=1, cross=True, s_given=s_b)
+
+            recB, qlossB, _ = model(dataB, label=0, cross=False)
             
             a2b_loss, log = model.loss_b(_, dataB, fakeB, optimizer_idx=1, global_step=epoch,
                                     last_layer=None, split="train")
+
+            b_rec_d_loss, _ = model.loss_b(_, dataB, recB, optimizer_idx=1, global_step=epoch,
+                                    last_layer=None, split="train")
+            
           
-            disc_b_loss = a2b_loss 
+            disc_b_loss = a2b_loss + 0.2*b_rec_d_loss
             disc_b_loss.backward()
             opt_disc_b.step()
 
             
             ## Generator 
-            # turn all the parameters of the three encoders on
-            for p in model.encoder.parameters():
-                p.requires_grad = True
-                
-            for p in model.style_enc_a.parameters():
-                p.requires_grad = True
-                
-            for p in model.style_enc_b.parameters():
-                p.requires_grad = True
-                
             opt_ae.zero_grad()
                 
-            
             # A reconstruction
-            recA, qlossA, _ = model(dataA, label=1, cross=False)
+            #recA, qlossA, _ = model(dataA, label=1, cross=False)
 
             aeloss_a, _ = model.loss_a(qlossA, dataA, recA, fake=fakeA, switch_weight=switch_weight, optimizer_idx=0, global_step=epoch,
                                     last_layer=model.get_last_layer(label=1), split="train")
-            
-         
-            
-            # B reconstruction
-            recB, qlossB, _ = model(dataB, label=0, cross=False)
-
-            aeloss_b, _ = model.loss_b(qlossB, dataB, recB, fake=fakeB, switch_weight=switch_weight, optimizer_idx=0, global_step=epoch,
-                                    last_layer=model.get_last_layer(label=0), split="train")
-            
-         
-            
-            gen_loss = aeloss_a + aeloss_b
-            gen_loss.backward(retain_graph=True)
-            opt_ae.step()
-            
-            
-            
-            # turn off the parameters of all encoders when doing style loss bp
-            for p in model.encoder.parameters():
-                p.requires_grad = False
-                
-            for p in model.style_enc_a.parameters():
-                p.requires_grad = False
-                
-            for p in model.style_enc_b.parameters():
-                p.requires_grad = False     
-                
-            opt_ae.zero_grad()
+                                    
+            aeloss_a = aeloss_a.to(device)
             
             # cross path with style a
-            s_a = model.encode_style(dataA, label=1)
-            fakeA, _, _ = model(dataB, label=0, cross=True, s_given=s_a)
             AtoBtoA, _, s_a_from_cross = model(fakeA, label=1, cross=False)
             
             # style_a loss
-            style_a_loss = torch.mean(torch.abs(s_a.detach() - s_a_from_cross))
+            style_a_loss = torch.mean(torch.abs(s_a.detach() - s_a_from_cross)).to(device)
             
             # content_b loss
             c_b_from_cross, _ = model.encode_content(fakeA)
             _, quant_c_b = model.encode_content(dataB)
-            content_b_loss = torch.mean(torch.abs(quant_c_b.detach() - c_b_from_cross))
+            content_b_loss = torch.mean(torch.abs(quant_c_b.detach() - c_b_from_cross)).to(device)
+            
+            
+            # B reconstruction
+            #recB, qlossB, _ = model(dataB, label=0, cross=False)
+
+            aeloss_b, _ = model.loss_b(qlossB, dataB, recB, fake=fakeB, switch_weight=switch_weight, optimizer_idx=0, global_step=epoch,
+                                    last_layer=model.get_last_layer(label=0), split="train")
+            
+            aeloss_b = aeloss_b.to(device)
             
             # cross path with style b
-            s_b = model.encode_style(dataB, label=0)
-            fakeB, _, s_b_sampled = model(dataA, label=1, cross=True, s_given=s_b)
             BtoAtoB, _, s_b_from_cross = model(fakeB, label=0, cross=False)
-            
+             
             # style_b loss
-            style_b_loss = torch.mean(torch.abs(s_b.detach() - s_b_from_cross))
+            style_b_loss = torch.mean(torch.abs(s_b.detach() - s_b_from_cross)).to(device)
             
-            # content_a loss
+             # content_a loss
             c_a_from_cross, _ = model.encode_content(fakeB)
             _, quant_c_a = model.encode_content(dataA)
-            content_a_loss = torch.mean(torch.abs(quant_c_a.detach() - c_a_from_cross))
+            content_a_loss = torch.mean(torch.abs(quant_c_a.detach() - c_a_from_cross)).to(device)
             
-            cross_loss = 0.1*(style_a_loss + style_b_loss) + 0.5*(content_a_loss + content_b_loss)
-            cross_loss.backward()
+            
+            gen_loss = aeloss_a + aeloss_b + 1.0*(style_a_loss + style_b_loss) + 0.2*(content_a_loss + content_b_loss)
+            gen_loss.backward()
             opt_ae.step()
             
             

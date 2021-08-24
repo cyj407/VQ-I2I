@@ -14,8 +14,10 @@ class CoordStage(object):
         b,ch,h,w = c.shape
         assert ch == 1
 
+        #print(c.shape)
         c = torch.nn.functional.interpolate(c, scale_factor=1/self.down_factor,
                                             mode="area")
+        #print(c)
         c = c.clamp(0.0, 1.0)
         c = self.n_embed*c
         c_quant = c.round()

@@ -3,7 +3,7 @@ model:
   target: taming_comb.models.vqgan.VQModelCrossGAN_ADAIN
   params:
     embed_dim: 512
-    n_embed: 64
+    n_embed: 512
     ddconfig:
       double_z: False
       z_channels: 256

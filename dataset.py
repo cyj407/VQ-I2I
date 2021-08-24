@@ -64,17 +64,17 @@ class dataset_single(data.Dataset):
         return self.A
 
 class dataset_unpair(data.Dataset):
-    def __init__(self, root, mode, resize=256, cropsize=256):
+    def __init__(self, root, mode, class_1, class_2, resize=256, cropsize=256):
         self.root = root
 
         # a
-        images_a = os.listdir(os.path.join(self.root, mode + 'A'))
-        self.A = [os.path.join(self.root, mode + 'A', x) for x in images_a]
+        images_a = os.listdir(os.path.join(self.root, mode + class_1))
+        self.A = [os.path.join(self.root, mode + class_1, x) for x in images_a]
         self.A_size = len(self.A)
 
         # b
-        images_b = os.listdir(os.path.join(self.root, mode + 'B'))
-        self.B = [os.path.join(self.root, mode + 'B', x) for x in images_b]
+        images_b = os.listdir(os.path.join(self.root, mode + class_2))
+        self.B = [os.path.join(self.root, mode + class_2, x) for x in images_b]
         self.B_size = len(self.B)
 
         self.labels_a = torch.Tensor([1] * len(images_a))
