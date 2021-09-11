@@ -1,22 +1,27 @@
-# VQI2I First Stage
-## Setting (b)
-### Execute
+# VQ-I2I
+## Environment
 ```
-python main_setting_b.py
+conda env create -f vqi2i_env.yml
 ```
-- ONLY NEED TO MODIFY THE HYPERPARAMETER SETTING IN `main_setting_b.py`
-### Log
-- ==New== `set_b_gan.py` is available to setting the ratio between self-reconstruction and a2b/b2a now.
-    - `main_setting_b.py` is not maintaining now.
-- Use `dataset_combine` to load the dataset
-    - **Class A label as 1, Class B label as 0**
-    - Resize to 286 first, and crop to 256
-- Configuration file `config_comb.yaml`
-    - Import `taming_comb` module
-    - **Only need to change the num of embeddings `ne` and embedding dims `ed` in the `main_setting_b.py`**
-- `taming_comb` module
-    - Modify `./models/vqgan.py`
-        - Two decoders with function `decode_a` and `decode_b`
-        - Function `get_last_layer` return a tuple of (dec_a.weight, dec_b.weight)
-    - Modify `./losses/vqperceptual.py`
-        - Close the `calculate_adaptive_weight` function
+## First stage -- translation
+### Train
+#### Unpaired I2I task
+```
+python unpair_train.py
+```
+#### Paired I2I task
+```
+python pair_train.py
+```
+### Test (unpaired I2I only.)
+- Save thetranslation results.
+```
+python save_transfer.py
+```
+## Second stage -- image generation and extension
+### Train
+```
+python autoregressive_train.py 0 <dataset_name> <ne> <ed> <z_channel> <epoch_start> <epoch_end>
+```
+### Test
+- The detail of  unconditional image generation and image extensions results are in `autoregressive_translation.ipynb`
