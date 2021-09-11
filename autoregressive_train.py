@@ -85,33 +85,17 @@ if __name__ == "__main__":
     switch_weight = 0.1 # self-reconstruction : a2b/b2a = 10 : 1
     
     
-    first_model_save_path = '{}_{}_{}_settingc_{}'.format(args.dataset, ed, ne, img_size)    # first stage model dir
-    save_path = args.dataset + '{}_{}_{}_transformer'.format(args.dataset, ed, ne)    # second stage model dir
+    first_model_save_path = '{}_disentangle_model'.format(args.dataset)
+    # first_model_save_path = '{}_{}_{}_settingc_{}'.format(args.dataset, ed, ne, img_size)    # first stage model dir
+    save_path = '{}_{}_{}_transformer'.format(args.dataset, ed, ne)    # second stage model dir
     print(save_path)
-    root = '/home/jenny870207/data/' + args.dataset + '/'
+    root = '/eva_data_2/vqi2i/datasets/' + args.dataset + '/'
 
     # load data
-    train_data = dataset_unpair(root, 'train', img_size, img_size)
+    train_data = dataset_unpair(root, 'train', 'A', 'B', img_size, img_size)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True)
 
-    # load first stage model
-    '''f = os.path.join(os.getcwd(), first_model_save_path, 'settingc_latest.pt')
-    config = OmegaConf.load('config_comb.yaml')
-    config.model.params.embed_dim = args.ed
-    config.model.params.n_embed = args.ne
-    config.model.z_channels = args.z_channel
-    config.model.resolution = 256
-    first_model = instantiate_from_config(config.model)
-    if(os.path.isfile(f)):
-        print('load ' + f)
-        ck = torch.load(f, map_location=device)
-        first_model.load_state_dict(ck['model_state_dict'], strict=False)
-    first_model = first_model.to(device)
-    first_model.eval()'''
-
     # load second stage model
-    f = os.path.join(os.getcwd(), save_path, 'latest.pt')
-    
     transformer_config = OmegaConf.load('transformer.yaml')
     transformer_config.model.params.first_stage_model_config.params.embed_dim = args.ed
     transformer_config.model.params.first_stage_model_config.params.n_embed = args.ne
@@ -121,6 +105,7 @@ if __name__ == "__main__":
     transformer_config.model.params.device = str(device)
     model = instantiate_from_config(transformer_config.model)
 
+    f = os.path.join(os.getcwd(), save_path, 'latest.pt')
     if(os.path.isfile(f)):
         print('load ' + f)
         ck = torch.load(f, map_location=device)
@@ -169,10 +154,6 @@ if __name__ == "__main__":
             coordinate = torch.from_numpy(coordinate)
             c = model.get_c(coordinate)
             c = c.to(device)
-            #print(c)
-
-            #print(c.shape)
-            #print(dataA.shape)
 
             # dataA
             logits, target = model(dataA, c, 1)
@@ -187,9 +168,7 @@ if __name__ == "__main__":
             train_loss_b.append(loss_b.item())
             loss_b.backward()
 
-
             opt_transformer.step()
-            
             
 
             if (i+1) % 1000 == 0:
@@ -210,7 +189,7 @@ if __name__ == "__main__":
             }, os.path.join(os.getcwd(), save_path, 'latest.pt'))
 
 
-        if(epoch % 20 == 0 and epoch >= 20):
+        if(epoch % 20 == 0 and epoch >= 60):
             torch.save(
                 {
                     'model_state_dict': model.state_dict(),
