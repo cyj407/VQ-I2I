@@ -101,17 +101,17 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
 if __name__ == "__main__":
 
     # dataloader
-    dataset = 'summer2winter'
-    root = '/home/jenny870207/data/{}'.format(dataset)
-    save_root = 'sample'
+    dataset = 'afhq'
+    root = '/eva_data0/dataset/{}'.format(dataset)
+    save_root = 'sample_afhq_withoutregression'
 
     mode = 'test'   # or 'train'
     config = 'config_comb.yaml' 
-    ed = 512
-    ne = 512
+    ed = 256
+    ne = 256
     img_size = 256    
     z = 128
-    atob = True
+    atob = False
 
     if(atob):
         validation_data_a = dataset_single(root, mode, 'A', img_size, img_size, flip=False)
@@ -122,8 +122,8 @@ if __name__ == "__main__":
   
     # model_name = 'portrait_{}_{}_settingc_{}'.format(ed, ne, img_size)
     # model_name = 'afhq_cat2dog_256_256_settingc_256'
-    model_name = 'summer2winter_disentangle_model'
-    epoch_list = ['500']
+    model_name = 'afhq_256_256_settingc_256_withoutregression' #'summer2winter_disentangle_model'
+    epoch_list = ['latest']
 
     ############################
     
@@ -131,7 +131,8 @@ if __name__ == "__main__":
         os.mkdir(save_root)
 
     for epoch in epoch_list:   
-        m_path = os.path.join(os.getcwd(), model_name, 'settingc_n_{}.pt'.format(epoch))
+        m_path = os.path.join(os.getcwd(), model_name, 'settingc_{}.pt'.format(epoch))
+        #m_path = "/eva_data3/VQI2I-setting-c/afhq_cat2dog_256_256_settingc_256/settingc_n_400.pt"
         config = 'config_comb.yaml'
         m = load_eval_model(m_path, config, ed, ne, 'taming_comb.models.vqgan.VQModelCrossGAN_ADAIN', z)
  
@@ -144,8 +145,8 @@ if __name__ == "__main__":
             os.mkdir(os.path.join(os.getcwd(), save_root, save_dir))
 
         # data loader
-        test_loader_a = DataLoader(validation_data_a, batch_size=1, shuffle=True, pin_memory=True)
-        test_loader_b = DataLoader(validation_data_b, batch_size=1, shuffle=True, pin_memory=True)
+        test_loader_a = DataLoader(validation_data_a, batch_size=1, shuffle=False, pin_memory=True)
+        test_loader_b = DataLoader(validation_data_b, batch_size=1, shuffle=False, pin_memory=True)
         
         test_img_name_a = validation_data_a.get_img_name()
         test_img_name_b = validation_data_b.get_img_name()
@@ -153,6 +154,8 @@ if __name__ == "__main__":
         
         # for idx1, data_A in enumerate(test_loader_a):
         for idx1 in range(len(validation_data_a)):
+            if idx1 == 30: # num of collections
+                break
             print('{}/{}'.format(idx1, len(validation_data_a)))
             img_name_a = test_img_name_a[idx1].rsplit('/', 1)[-1]
 
@@ -209,4 +212,4 @@ if __name__ == "__main__":
                         AcBs, _, _ = m(data_A, label=0, cross=True, s_given=s_b)
                     res = AcBs
                 save_tensor(res, cur_dir, 'trans_{}.jpg'.format(idx2))
-            
+                save_tensor(data_B, cur_dir, 'style.jpg')

@@ -37,41 +37,41 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("device",
+    parser.add_argument("--device", default='4',
                     help="specify the GPU(s)",
                     type=str)
 
-    parser.add_argument("dataset",
+    parser.add_argument("--dataset", default='summer2winter_yosemite',
                     help="dataset",
                     type=str)
     
-    parser.add_argument("ne",
+    parser.add_argument("--ne", default=512,
                     help="the number of embedding",
                     type=int)
 
-    parser.add_argument("ed",
+    parser.add_argument("--ed", default=512,
                     help="embedding dimension",
                     type=int)
 
-    parser.add_argument("z_channel",
+    parser.add_argument("--z_channel",default=128,
                     help="z channel",
                     type=int)
     
 
-    parser.add_argument("epoch_start",
+    parser.add_argument("--epoch_start", default=0,
                     help="start from",
                     type=int)
 
-    parser.add_argument("epoch_end",
+    parser.add_argument("--epoch_end", default=1000,
                     help="end at",
                     type=int)
 
     args = parser.parse_args()
 
-    os.environ["CUDA_VISIBLE_DEVICES"]=args.device
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.device
 
     # ONLY MODIFY SETTING HERE
-    device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
+    device = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
     print('device: ', device)
     batch_size = 1 # 128
     learning_rate = 1e-5       # 256/512 lr=4.5e-6 from 71 epochs
@@ -84,9 +84,10 @@ if __name__ == "__main__":
     
     
     # save_path = 'both_afhq_{}_{}_rec_switch_img128'.format(ed, ne)    # model dir
-    save_path = args.dataset + '_{}_{}_settingc_{}'.format(ed, ne, img_size)    # model dir
+    # save_path = args.dataset + '_{}_{}_settingc_{}_withoutregression'.format(ed, ne, img_size)    # model dir
+    save_path = args.dataset + '_{}_{}_settingc_{}_final_test'.format(ed, ne, img_size)    # model dir
     print(save_path)
-    root = '/home/jenny870207/data/' + args.dataset + '/'
+    root = '/eva_data0/dataset/' + args.dataset + '/'
 
     # load data
     train_data = dataset_unpair(root, 'train', 'A', 'B', img_size, img_size)
@@ -156,7 +157,7 @@ if __name__ == "__main__":
     iterations = iterations + 1 if len(train_data) % batch_size != 0 else iterations
     
     
-    torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    # torch.set_default_tensor_type('torch.cuda.FloatTensor')
     
     for epoch in range(epoch_start, epoch_end+1):
         for i in range(iterations):
@@ -247,7 +248,7 @@ if __name__ == "__main__":
             content_a_loss = torch.mean(torch.abs(quant_c_a.detach() - c_a_from_cross)).to(device)
             
             
-            gen_loss = aeloss_a + aeloss_b + 1.0*(style_a_loss + style_b_loss) + 0.2*(content_a_loss + content_b_loss)
+            gen_loss = aeloss_a + aeloss_b  #+ 1.0*(style_a_loss + style_b_loss) # + 0.2*(content_a_loss + content_b_loss)
             gen_loss.backward()
             opt_ae.step()
             
@@ -272,7 +273,7 @@ if __name__ == "__main__":
             train_content_a_loss.append(content_a_loss.item())
             train_content_b_loss.append(content_b_loss.item())
             
-
+            
             if (i+1) % 1000 == 0:
                 _rec  = 'epoch {}, {} iterations\n'.format(epoch, i+1)
                 _rec += '(A domain) ae_loss: {:8f}, disc_loss: {:8f}\n'.format(

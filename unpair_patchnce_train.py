@@ -29,35 +29,36 @@ def instantiate_from_config(config):
     return get_obj_from_str(config["target"])(**config.get("params", dict()))
 
 
-os.environ["CUDA_VISIBLE_DEVICES"]='0'
+os.environ["CUDA_VISIBLE_DEVICES"]='5'
 
 
 if __name__ == "__main__":
 
     # ONLY MODIFY SETTING HERE
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     torch.cuda.set_device(0)
     batch_size = 1 # 128
     learning_rate = 1e-5        # 256/512 lr=4.5e-6 from 71 epochs
     ne = 256  # Enlarge
     ed = 256
     epoch_start = 1
-    epoch_end = 300
+    epoch_end = 500
     switch_weight = 0.1 # portrait 0.05
 
     # save_path = 'portrait_{}_{}_settingc_cut'.format(ed, ne)    # model dir
-    save_path = 'yosemite_{}_{}_settingc_cut'.format(ed, ne)    # model dir
+    save_path = 'yosemite_{}_{}_settingc_cut_img128'.format(ed, ne)    # model dir
     # save_path = 'afhq_{}_{}_settingc_cut'.format(ed, ne)    # model dir
     print(save_path)
-    root = '/home/jenny870207/data/summer2winter/'
+    root = '/eva_data0/dataset/summer2winter_yosemite/'
+
 
     # load data
-    train_data = dataset_unpair(root, 'train', 256, 256)
+    train_data = dataset_unpair(root, 'train', 'A', 'B', 128, 128)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True)
 
     ## patchnce loss model
-    load_path = os.path.join(os.getcwd(), 'patchnce_model')
-    patchnce_model = PatchNCEModel(load_path, batch_size, gpu_ids=[0])
+    # load_path = os.path.join(os.getcwd(), 'patchnce_model')
+    # patchnce_model = PatchNCEModel(load_path, batch_size, gpu_ids=[0])
     
     f = os.path.join(os.getcwd(), save_path, 'settingc_n_latest.pt')
     config = OmegaConf.load('config_comb.yaml')
@@ -65,7 +66,7 @@ if __name__ == "__main__":
     config.model.base_learning_rate = learning_rate
     config.model.params.embed_dim = ed
     config.model.params.n_embed = ne
-    config.model.z_channels = 256
+    config.model.z_channels = 128
     config.model.resolution = 256
     model = instantiate_from_config(config.model)
     if(os.path.isfile(f)):
@@ -117,8 +118,8 @@ if __name__ == "__main__":
     train_style_b_loss = []
     train_content_a_loss = []
     train_content_b_loss = []
-    train_nce_a_loss = []
-    train_nce_b_loss = []
+    # train_nce_a_loss = []
+    # train_nce_b_loss = []
 
     iterations = len(train_data) // batch_size
     iterations = iterations + 1 if len(train_data) % batch_size != 0 else iterations
@@ -230,10 +231,10 @@ if __name__ == "__main__":
             _, quant_c_a = model.encode_content(dataA)
             content_a_loss = torch.mean(torch.abs(quant_c_a.detach() - c_a_from_cross))
             
-            nce_c_a_loss = patchnce_model.calculate_NCE_loss( dataA, fakeB)
-            nce_c_b_loss = patchnce_model.calculate_NCE_loss( dataB, fakeA)
+            # nce_c_a_loss = patchnce_model.calculate_NCE_loss( dataA, fakeB)
+            # nce_c_b_loss = patchnce_model.calculate_NCE_loss( dataB, fakeA)
 
-            cross_loss = 0.1*(style_a_loss + style_b_loss) + 0.5*(content_a_loss + content_b_loss) + 0.5*(nce_c_a_loss + nce_c_b_loss)
+            cross_loss = 0.1*(style_a_loss + style_b_loss) + 0.5*(content_a_loss + content_b_loss) #+ 0.5*(nce_c_a_loss + nce_c_b_loss)
             cross_loss.backward()
             opt_ae.step()
             
@@ -258,8 +259,8 @@ if __name__ == "__main__":
             train_content_a_loss.append(content_a_loss.item())
             train_content_b_loss.append(content_b_loss.item())
             
-            train_nce_a_loss.append(nce_c_a_loss.item())
-            train_nce_b_loss.append(nce_c_b_loss.item())
+            # train_nce_a_loss.append(nce_c_a_loss.item())
+            # train_nce_b_loss.append(nce_c_b_loss.item())
             if (i+1) % 1000 == 0:
                 _rec  = 'epoch {}, {} iterations\n'.format(epoch, i+1)
                 _rec += '(A domain) ae_loss: {:8f}, disc_loss: {:8f}\n'.format(
@@ -281,10 +282,10 @@ if __name__ == "__main__":
                 _rec += 'content_b_loss: {:8f}\n\n'.format(
                     np.mean(train_content_b_loss[-1000:]))
                 
-                _rec += 'patchnce_a_loss: {:8f}\n\n'.format(
-                    np.mean(train_nce_a_loss[-1000:]))
-                _rec += 'patchnce_b_loss: {:8f}\n\n'.format(
-                    np.mean(train_nce_b_loss[-1000:]))
+                # _rec += 'patchnce_a_loss: {:8f}\n\n'.format(
+                #     np.mean(train_nce_a_loss[-1000:]))
+                # _rec += 'patchnce_b_loss: {:8f}\n\n'.format(
+                #     np.mean(train_nce_b_loss[-1000:]))
                 print(_rec)
                 with open(os.path.join(os.getcwd(), save_path, 'loss.txt'), 'a') as f:
                     f.write(_rec)
