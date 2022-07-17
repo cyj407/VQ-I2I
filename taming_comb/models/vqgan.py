@@ -7,6 +7,8 @@ from torch.autograd import Variable
 
 from taming_comb.modules.diffusionmodules.model import * #Encoder, Decoder, VUNet
 from taming_comb.modules.vqvae.quantize import VectorQuantizer
+from taming_comb.modules.discriminator.model import NLayerDiscriminator
+from taming_comb.modules.losses.vqperceptual import hinge_d_loss
 
 
 def get_obj_from_str(string, reload=False):
@@ -156,9 +158,7 @@ class VQModel_ADAIN(nn.Module):
         return num_adain_params
 
     
-    
-from taming_comb.modules.discriminator.model import NLayerDiscriminator
-from taming_comb.modules.losses.vqperceptual import hinge_d_loss
+
 class VQModelCrossGAN_ADAIN(VQModel_ADAIN):
     def __init__(self,
                  ddconfig,

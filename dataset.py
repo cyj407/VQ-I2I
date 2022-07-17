@@ -131,9 +131,6 @@ class dataset_combine(data.Dataset):
         B = [os.path.join(self.root, mode + 'B', x) for x in images_b]
         self.imgs = A + B
 
-        # 0 represents class A, 1 represents class B
-        # labels = [0] * len(images_a) + [1] * len(images_b)
-        
         # 1 represents class A, 0 represents class B
         labels = [1] * len(images_a) + [0] * len(images_b)
         labels = torch.Tensor(labels)
@@ -175,22 +172,12 @@ class dataset_combine(data.Dataset):
         return img
 
     def var(self):
-        # np_a = []
-        # np_b = []
         np_imgs = []    # (dataset_size, 3, H, W)
         for i in range(len(self.imgs)):
             img = self.load_img(self.imgs[i], self.input_dim)
             np_imgs.append(np.array(img))
-            # if(i < self.A_size):
-            #     np_a.append(np.array(img))
-            # else:
-            #     np_b.append(np.array(img))
         print(np.array(np_imgs).mean())
         data_variance = np.var( np.array(np_imgs) / 255.0)
-        # var_a = np.var( np.array(np_a) / 255.0)
-        # var_b = np.var( np.array(np_b) / 255.0)
-        # print(var_a)
-        # print(var_b)
         return data_variance
 
 

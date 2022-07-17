@@ -87,7 +87,7 @@ if __name__ == "__main__":
     
     first_model_save_path = '{}_disentangle_model'.format(args.dataset)
     # first_model_save_path = '{}_{}_{}_settingc_{}'.format(args.dataset, ed, ne, img_size)    # first stage model dir
-    save_path = '{}_{}_{}_transformer'.format(args.dataset, ed, ne)    # second stage model dir
+    save_path = '{}_{}_{}_transformer_final_test'.format(args.dataset, ed, ne)    # second stage model dir
     print(save_path)
     root = '/eva_data_2/vqi2i/datasets/' + args.dataset + '/'
 

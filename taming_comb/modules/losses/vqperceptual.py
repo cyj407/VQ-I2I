@@ -62,10 +62,6 @@ class VQLPIPSWithDiscriminator(nn.Module):
 
     def calculate_adaptive_weight(self, nll_loss, g_loss, last_layer=None):
         if last_layer is not None:
-            # nll_grads_a = torch.autograd.grad(nll_loss, last_layer[0], retain_graph=True)[0]
-            # nll_grads_b = torch.autograd.grad(nll_loss, last_layer[1], retain_graph=True)[0]
-            # g_grads_a = torch.autograd.grad(g_loss, last_layer[0], retain_graph=True)[0]
-            # g_grads_b = torch.autograd.grad(g_loss, last_layer[1], retain_graph=True)[0]
             nll_grads = torch.autograd.grad(nll_loss, last_layer, retain_graph=True)[0]
             g_grads = torch.autograd.grad(g_loss, last_layer, retain_graph=True)[0]
         else:
@@ -73,13 +69,6 @@ class VQLPIPSWithDiscriminator(nn.Module):
             g_grads = torch.autograd.grad(g_loss, self.last_layer[0], retain_graph=True)[0]
 
         d_weight = torch.norm(nll_grads) / (torch.norm(g_grads) + 1e-4)
-        # d_weight_a = torch.norm(nll_grads_a) / (torch.norm(g_grads_a) + 1e-4)
-        # d_weight_b = torch.norm(nll_grads_a) / (torch.norm(g_grads_b) + 1e-4)
-        # d_weight = (d_weight_a * (3-num_of_b) + d_weight_b * num_of_b) / 3.0
-        # d_weight_a = torch.clamp(d_weight_a, 0.0, 1e4).detach()
-        # d_weight_a = d_weight_a * self.discriminator_weight
-        # d_weight_b = torch.clamp(d_weight_b, 0.0, 1e4).detach()
-        # d_weight_b = d_weight_b * self.discriminator_weight
         
         d_weight = torch.clamp(d_weight, 0.0, 1e4).detach()
         d_weight = d_weight * self.discriminator_weight
@@ -123,7 +112,8 @@ class VQLPIPSWithDiscriminator(nn.Module):
             ### self-reconstruction also feed into discriminator
             logits_fake = self.discriminator(reconstructions.contiguous())
             g_rec_loss = -torch.mean(logits_fake)
-            '''try:
+            '''
+            try:
                 d_weight = self.calculate_adaptive_weight(nll_loss, g_rec_loss, last_layer=last_layer)
             except RuntimeError:
                 assert not self.training
@@ -131,12 +121,12 @@ class VQLPIPSWithDiscriminator(nn.Module):
             disc_factor = adopt_weight(self.disc_factor, global_step, threshold=self.discriminator_iter_start)
             selfrec_loss = nll_loss + d_weight * disc_factor * g_rec_loss + self.codebook_weight * codebook_loss.mean()
             switch_loss = g_loss * switch_weight
-            loss = selfrec_loss + switch_loss'''
+            loss = selfrec_loss + switch_loss
+            '''
 
             ### only switch decoder feed into disciminator
             disc_factor = adopt_weight(self.disc_factor, global_step, threshold=self.discriminator_iter_start)
             loss = 5*nll_loss + (1.0*g_loss + 0.2*g_rec_loss) * switch_weight + self.codebook_weight * codebook_loss.mean()
-            #loss = 10*nll_loss + d_weight * disc_factor * g_loss * switch_weight + self.codebook_weight * codebook_loss.mean() + g_rec_loss
 
             
             log = {"{}/total_loss".format(split): loss.clone().detach().mean(),
