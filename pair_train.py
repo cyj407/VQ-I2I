@@ -37,32 +37,36 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("device",
+    parser.add_argument("--device", default='4',
                     help="specify the GPU(s)",
                     type=str)
 
-    parser.add_argument("dataset",
-                    help="dataset",
+    parser.add_argument("--root_dir", default='/eva_data0/dataset/',
+                    help="dataset path",
+                    type=str)
+
+    parser.add_argument("--dataset", default='cityscapes',
+                    help="dataset directory name",
                     type=str)
     
-    parser.add_argument("ne",
+    parser.add_argument("--ne", default=512,
                     help="the number of embedding",
                     type=int)
 
-    parser.add_argument("ed",
+    parser.add_argument("--ed", default=512,
                     help="embedding dimension",
                     type=int)
 
-    parser.add_argument("z_channel",
+    parser.add_argument("--z_channel",default=128,
                     help="z channel",
                     type=int)
     
 
-    parser.add_argument("epoch_start",
+    parser.add_argument("--epoch_start", default=0,
                     help="start from",
                     type=int)
 
-    parser.add_argument("epoch_end",
+    parser.add_argument("--epoch_end", default=1000,
                     help="end at",
                     type=int)
 
@@ -83,10 +87,10 @@ if __name__ == "__main__":
     switch_weight = 0.1 # self-reconstruction : a2b/b2a = 10 : 1
     
     
-    # save_path = 'both_afhq_{}_{}_rec_switch_img128'.format(ed, ne)    # model dir
-    save_path = args.dataset + '_{}_{}_pair'.format(ed, ne)    # model dir
+    save_path = '{}_{}_{}_pair'.format(args.dataset, ed, ne)    # model dir
     print(save_path)
-    root = '/home/jenny870207/data/' + args.dataset + '/'
+    root = os.path.join(args.root_dir, args.dataset)
+
 
     # load data
     train_data = dataset_pair(root, 'train', img_size, img_size)
@@ -156,7 +160,7 @@ if __name__ == "__main__":
     iterations = iterations + 1 if len(train_data) % batch_size != 0 else iterations
     
     
-    torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    # torch.set_default_tensor_type('torch.cuda.FloatTensor')
     
     for epoch in range(epoch_start, epoch_end+1):
         for i in range(iterations):
@@ -263,7 +267,7 @@ if __name__ == "__main__":
             
             train_content_loss.append(content_loss.item())
             train_cross_recons_loss.append(cross_recons_loss.item())
-            
+
 
             if (i+1) % 1000 == 0:
                 _rec  = 'epoch {}, {} iterations\n'.format(epoch, i+1)
@@ -292,7 +296,7 @@ if __name__ == "__main__":
                 with open(os.path.join(os.getcwd(), save_path, 'loss.txt'), 'a') as f:
                     f.write(_rec)
                     f.close()
-            
+
         torch.save(
             {
                 'model_state_dict': model.state_dict(),
@@ -310,11 +314,3 @@ if __name__ == "__main__":
                     'opt_disc_a_state_dict': opt_disc_a.state_dict(),
                     'opt_disc_b_state_dict': opt_disc_b.state_dict()
                 }, os.path.join(os.getcwd(), save_path, 'settingc_n_{}.pt'.format(epoch)))
-            # torch.save(
-            #     {
-            #         'model_state_dict': model.state_dict(),
-            #         'opt_ae_state_dict': opt_ae.state_dict(),
-            #         'opt_disc_a_state_dict': opt_disc_a.state_dict(),
-            #         'opt_disc_b_state_dict': opt_disc_b.state_dict()
-            #     }, os.path.join(os.getcwd(), save_path, 'vqgan_latest.pt'))
-

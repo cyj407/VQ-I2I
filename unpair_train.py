@@ -41,10 +41,14 @@ if __name__ == "__main__":
                     help="specify the GPU(s)",
                     type=str)
 
-    parser.add_argument("--dataset", default='summer2winter_yosemite',
-                    help="dataset",
+    parser.add_argument("--root_dir", default='/eva_data0/dataset/',
+                    help="dataset path",
                     type=str)
-    
+
+    parser.add_argument("--dataset", default='summer2winter_yosemite',
+                    help="dataset directory name",
+                    type=str)
+                    
     parser.add_argument("--ne", default=512,
                     help="the number of embedding",
                     type=int)
@@ -83,11 +87,9 @@ if __name__ == "__main__":
     switch_weight = 0.1 # self-reconstruction : a2b/b2a = 10 : 1
     
     
-    # save_path = 'both_afhq_{}_{}_rec_switch_img128'.format(ed, ne)    # model dir
-    # save_path = args.dataset + '_{}_{}_settingc_{}_withoutregression'.format(ed, ne, img_size)    # model dir
-    save_path = args.dataset + '_{}_{}_settingc_{}_final_test'.format(ed, ne, img_size)    # model dir
+    save_path = '{}_{}_{}_settingc_{}_final_test'.format(args.dataset, ed, ne, img_size)    # model dir
     print(save_path)
-    root = '/eva_data0/dataset/' + args.dataset + '/'
+    root = os.path.join(args.root_dir, args.dataset)
 
     # load data
     train_data = dataset_unpair(root, 'train', 'A', 'B', img_size, img_size)
@@ -110,7 +112,6 @@ if __name__ == "__main__":
     model = model.to(device)
     model.train()
 
-    # print(model.loss.discriminator)
     
     opt_ae = torch.optim.Adam(list(model.encoder.parameters())+
                                 list(model.decoder_a.parameters())+
@@ -272,8 +273,8 @@ if __name__ == "__main__":
             
             train_content_a_loss.append(content_a_loss.item())
             train_content_b_loss.append(content_b_loss.item())
-            
-            
+
+
             if (i+1) % 1000 == 0:
                 _rec  = 'epoch {}, {} iterations\n'.format(epoch, i+1)
                 _rec += '(A domain) ae_loss: {:8f}, disc_loss: {:8f}\n'.format(
@@ -299,7 +300,7 @@ if __name__ == "__main__":
                 with open(os.path.join(os.getcwd(), save_path, 'loss.txt'), 'a') as f:
                     f.write(_rec)
                     f.close()
-            
+
         torch.save(
             {
                 'model_state_dict': model.state_dict(),
@@ -317,11 +318,3 @@ if __name__ == "__main__":
                     'opt_disc_a_state_dict': opt_disc_a.state_dict(),
                     'opt_disc_b_state_dict': opt_disc_b.state_dict()
                 }, os.path.join(os.getcwd(), save_path, 'settingc_n_{}.pt'.format(epoch)))
-            # torch.save(
-            #     {
-            #         'model_state_dict': model.state_dict(),
-            #         'opt_ae_state_dict': opt_ae.state_dict(),
-            #         'opt_disc_a_state_dict': opt_disc_a.state_dict(),
-            #         'opt_disc_b_state_dict': opt_disc_b.state_dict()
-            #     }, os.path.join(os.getcwd(), save_path, 'vqgan_latest.pt'))
-
