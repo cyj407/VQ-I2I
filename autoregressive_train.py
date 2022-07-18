@@ -39,32 +39,41 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("device",
+
+    parser.add_argument("--device", default='4',
                     help="specify the GPU(s)",
                     type=str)
 
-    parser.add_argument("dataset",
-                    help="dataset",
+    parser.add_argument("--root_dir", default='/eva_data0/dataset/',
+                    help="dataset path",
                     type=str)
-    
-    parser.add_argument("ne",
+
+    parser.add_argument("--dataset", default='summer2winter_yosemite',
+                    help="dataset directory name",
+                    type=str)
+
+    parser.add_argument("--first_stage_model", default='/eva_data7/VQ-I2I/summer2winter_yosemite_512_512_settingc_256_final_test/',
+                    help="first stage model directory",
+                    type=str)
+                    
+    parser.add_argument("--ne", default=512,
                     help="the number of embedding",
                     type=int)
 
-    parser.add_argument("ed",
+    parser.add_argument("--ed", default=512,
                     help="embedding dimension",
                     type=int)
 
-    parser.add_argument("z_channel",
+    parser.add_argument("--z_channel",default=128,
                     help="z channel",
                     type=int)
     
 
-    parser.add_argument("epoch_start",
+    parser.add_argument("--epoch_start", default=1,
                     help="start from",
                     type=int)
 
-    parser.add_argument("epoch_end",
+    parser.add_argument("--epoch_end", default=900,
                     help="end at",
                     type=int)
 
@@ -77,19 +86,13 @@ if __name__ == "__main__":
     print('device: ', device)
     batch_size = 1 # 128
     learning_rate = 1e-5       # 256/512 lr=4.5e-6 from 71 epochs
-    ne = args.ne  # Enlarge
-    ed = args.ed
     img_size = 256
-    epoch_start = args.epoch_start
-    epoch_end = args.epoch_end
-    switch_weight = 0.1 # self-reconstruction : a2b/b2a = 10 : 1
     
-    
-    first_model_save_path = '{}_disentangle_model'.format(args.dataset)
-    # first_model_save_path = '{}_{}_{}_settingc_{}'.format(args.dataset, ed, ne, img_size)    # first stage model dir
-    save_path = '{}_{}_{}_transformer_final_test'.format(args.dataset, ed, ne)    # second stage model dir
+
+    save_path = '{}_{}_{}_transformer_final_test'.format(args.dataset, args.ed, args.ne)    # second stage model dir
     print(save_path)
-    root = '/eva_data_2/vqi2i/datasets/' + args.dataset + '/'
+    root = os.path.join(args.root_dir, args.dataset)
+
 
     # load data
     train_data = dataset_unpair(root, 'train', 'A', 'B', img_size, img_size)
@@ -100,8 +103,7 @@ if __name__ == "__main__":
     transformer_config.model.params.first_stage_model_config.params.embed_dim = args.ed
     transformer_config.model.params.first_stage_model_config.params.n_embed = args.ne
     transformer_config.model.params.first_stage_model_config.z_channels = args.z_channel
-    transformer_config.model.params.first_stage_model_config.resolution = 256
-    transformer_config.model.params.f_path = os.path.join(os.getcwd(), first_model_save_path, 'settingc_latest.pt')
+    transformer_config.model.params.f_path = os.path.join(os.getcwd(), args.first_stage_model, 'settingc_latest.pt')
     transformer_config.model.params.device = str(device)
     model = instantiate_from_config(transformer_config.model)
 
@@ -134,14 +136,14 @@ if __name__ == "__main__":
     iterations = iterations + 1 if len(train_data) % batch_size != 0 else iterations
     
     
-    torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    # torch.set_default_tensor_type('torch.cuda.FloatTensor')
     
     train_loss_a = []
     train_loss_b = []
     
 
 
-    for epoch in range(epoch_start, epoch_end+1):
+    for epoch in range(args.epoch_start, args.epoch_end+1):
         for i in range(iterations):
 
             dataA, dataB = next(iter(train_loader))
@@ -169,7 +171,7 @@ if __name__ == "__main__":
             loss_b.backward()
 
             opt_transformer.step()
-            
+
 
             if (i+1) % 1000 == 0:
                 _rec  = 'epoch {}, {} iterations\n'.format(epoch, i+1)
@@ -180,7 +182,7 @@ if __name__ == "__main__":
                 with open(os.path.join(os.getcwd(), save_path, 'loss.txt'), 'a') as f:
                     f.write(_rec)
                     f.close()
-            
+
         torch.save(
             {
                 'model_state_dict': model.state_dict(),

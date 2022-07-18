@@ -79,15 +79,11 @@ if __name__ == "__main__":
     print('device: ', device)
     batch_size = 1 # 128
     learning_rate = 1e-5       # 256/512 lr=4.5e-6 from 71 epochs
-    ne = args.ne  # Enlarge
-    ed = args.ed
     img_size = 256
-    epoch_start = args.epoch_start
-    epoch_end = args.epoch_end
     switch_weight = 0.1 # self-reconstruction : a2b/b2a = 10 : 1
     
     
-    save_path = '{}_{}_{}_pair'.format(args.dataset, ed, ne)    # model dir
+    save_path = '{}_{}_{}_pair'.format(args.dataset, args.ed, args.ne)    # model dir
     print(save_path)
     root = os.path.join(args.root_dir, args.dataset)
 
@@ -101,8 +97,8 @@ if __name__ == "__main__":
     config = OmegaConf.load('config_comb.yaml')
     config.model.target = 'taming_comb.models.vqgan.VQModelCrossGAN_ADAIN'
     config.model.base_learning_rate = learning_rate
-    config.model.params.embed_dim = ed
-    config.model.params.n_embed = ne
+    config.model.params.embed_dim = args.ed
+    config.model.params.n_embed = args.ne
     config.model.z_channels = args.z_channel
     config.model.resolution = 256
     model = instantiate_from_config(config.model)
@@ -162,7 +158,7 @@ if __name__ == "__main__":
     
     # torch.set_default_tensor_type('torch.cuda.FloatTensor')
     
-    for epoch in range(epoch_start, epoch_end+1):
+    for epoch in range(args.epoch_start, args.epoch_end+1):
         for i in range(iterations):
 
             dataA, dataB = next(iter(train_loader))
