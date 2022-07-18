@@ -1,4 +1,5 @@
 from __future__ import print_function
+from genericpath import exists
 import torch
 import numpy as np
 from PIL import Image
@@ -12,6 +13,8 @@ from torchvision.utils import make_grid
 import matplotlib as mpl
 import random
 import importlib
+import argparse
+
 mpl.rcParams.update({'figure.max_open_warning': 0})
 
 from taming_comb.modules.style_encoder.network import *
@@ -94,122 +97,136 @@ def save_tensor(im_data, image_dir, image_name):
     save_image(im, save_path)
 
 
-device = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
-
-
-
 if __name__ == "__main__":
 
+    parser = argparse.ArgumentParser()
+
+
+    parser.add_argument("--device", default='0',
+                    help="specify the GPU(s)",
+                    type=str)
+
+    parser.add_argument("--root_dir", default='/eva_data0/dataset/',
+                    help="dataset path",
+                    type=str)
+
+    parser.add_argument("--dataset", default='summer2winter_yosemite',
+                    help="dataset directory name",
+                    type=str)
+
+    parser.add_argument("--checkpoint_dir", default='/eva_data7/VQ-I2I/summer2winter_yosemite_512_512_settingc_256_final_test/',
+                    help="first stage model directory",
+                    type=str)
+
+    parser.add_argument("--checkpoint_epoch", default='latest', # or 'n_600' / 'n_400' ...
+                    help="the number of the epoch used for the checkpoint",
+                    type=str)
+
+    parser.add_argument("--save_name", default='translation_summer2winter_yosemite',
+                    help="dataset directory name",
+                    type=str)
+    
+    parser.add_argument("--atob", default=True,
+                    help="True: domain A--> domain B; False: domain B--> domain A",
+                    type=bool)
+
+    parser.add_argument("--intra_transfer", default=False,
+                    help="intra-domain translation",
+                    type=bool)
+                    
+    parser.add_argument("--ne", default=512,
+                    help="the number of embedding",
+                    type=int)
+
+    parser.add_argument("--ed", default=512,
+                    help="embedding dimension",
+                    type=int)
+
+    parser.add_argument("--z_channel",default=128,
+                    help="z channel",
+                    type=int)
+
+    args = parser.parse_args()
+
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.device
+    device = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
+
+
     # dataloader
-    dataset = 'afhq'
-    root = '/eva_data0/dataset/{}'.format(dataset)
-    save_root = 'sample_afhq_withoutregression'
-
+    root = os.path.join(args.root_dir, args.dataset)
     mode = 'test'   # or 'train'
-    config = 'config_comb.yaml' 
-    ed = 256
-    ne = 256
-    img_size = 256    
-    z = 128
-    atob = False
-
-    if(atob):
+    img_size = 256
+    if(args.atob):
         validation_data_a = dataset_single(root, mode, 'A', img_size, img_size, flip=False)
         validation_data_b = dataset_single(root, mode, 'B', img_size, img_size, flip=False)
     else:
         validation_data_a = dataset_single(root, mode, 'B', img_size, img_size, flip=False)
         validation_data_b = dataset_single(root, mode, 'A', img_size, img_size, flip=False)
-  
-    # model_name = 'portrait_{}_{}_settingc_{}'.format(ed, ne, img_size)
-    # model_name = 'afhq_cat2dog_256_256_settingc_256'
-    model_name = 'afhq_256_256_settingc_256_withoutregression' #'summer2winter_disentangle_model'
-    epoch_list = ['latest']
 
     ############################
     
-    if(not os.path.isdir(save_root)):
-        os.mkdir(save_root)
+    # load first stage model
+    m_path = os.path.join(os.getcwd(), args.checkpoint_dir, 'settingc_{}.pt'.format(args.checkpoint_epoch))
+    config = 'config_comb.yaml'
+    m = load_eval_model(m_path, config, args.ed, args.ne, 'taming_comb.models.vqgan.VQModelCrossGAN_ADAIN', args.z_channel)
 
-    for epoch in epoch_list:   
-        m_path = os.path.join(os.getcwd(), model_name, 'settingc_{}.pt'.format(epoch))
-        #m_path = "/eva_data3/VQI2I-setting-c/afhq_cat2dog_256_256_settingc_256/settingc_n_400.pt"
-        config = 'config_comb.yaml'
-        m = load_eval_model(m_path, config, ed, ne, 'taming_comb.models.vqgan.VQModelCrossGAN_ADAIN', z)
- 
-        if(atob):
-            save_dir = '{}_a2b'.format(dataset)
-        else:
-            save_dir = '{}_b2a'.format(dataset)
+    if(args.atob):
+        save_dir = '{}_a2b'.format(args.dataset)
+    else:
+        save_dir = '{}_b2a'.format(args.dataset)
 
-        if(not os.path.isdir(os.path.join(os.getcwd(), save_root, save_dir))):
-            os.mkdir(os.path.join(os.getcwd(), save_root, save_dir))
 
-        # data loader
-        test_loader_a = DataLoader(validation_data_a, batch_size=1, shuffle=False, pin_memory=True)
-        test_loader_b = DataLoader(validation_data_b, batch_size=1, shuffle=False, pin_memory=True)
+    # data loader
+    test_loader_a = DataLoader(validation_data_a, batch_size=1, shuffle=False, pin_memory=True)
+    test_loader_b = DataLoader(validation_data_b, batch_size=1, shuffle=False, pin_memory=True)
+    
+    test_img_name_a = validation_data_a.get_img_name()
+    test_img_name_b = validation_data_b.get_img_name()
+    
+    
+    for idx1 in range(len(validation_data_a)):
+        if idx1 == 5: # sample first 5 images from the testing set
+            break
+        print('{}/{}'.format(idx1, len(validation_data_a)))
+        img_name_a = test_img_name_a[idx1].rsplit('/', 1)[-1]
+
+        data_A = validation_data_a[idx1].unsqueeze(0)
+        data_A = data_A.to(device)
+
+        os.makedirs(os.path.join(os.getcwd(), args.save_name, save_dir, img_name_a), exist_ok=True)
         
-        test_img_name_a = validation_data_a.get_img_name()
-        test_img_name_b = validation_data_b.get_img_name()
+        cur_dir = os.path.join(os.getcwd(), args.save_name, save_dir, img_name_a)
+        save_tensor(data_A, cur_dir, 'input.jpg')
         
-        
-        # for idx1, data_A in enumerate(test_loader_a):
-        for idx1 in range(len(validation_data_a)):
-            if idx1 == 30: # num of collections
-                break
-            print('{}/{}'.format(idx1, len(validation_data_a)))
-            img_name_a = test_img_name_a[idx1].rsplit('/', 1)[-1]
-
-            data_A = validation_data_a[idx1].unsqueeze(0)
-
-            data_A = data_A.to(device)
-            
-            if(not os.path.isdir(os.path.join(os.getcwd(), save_root, save_dir, img_name_a))):
-                os.mkdir(os.path.join(os.getcwd(), save_root, save_dir, img_name_a))
-
-            cur_dir = os.path.join(os.getcwd(), save_root, save_dir, img_name_a)
-            save_tensor(data_A, cur_dir, 'input.jpg')
-            '''
-            ## intra-domain style transfer
-            for i in range(20):
+        if args.intra_transfer:  ## intra-domain style transfer
+            for i in range(3): # random choose for 20 style images from the same domain
                 data_A2 = validation_data_a[random.randint(0, len(validation_data_a)-1)].unsqueeze(0)
                 data_A2 = data_A2.to(device)
-                if(atob):
-                    # s_a = m.encode_style(data_A, label=1)
-                    s_a2 = m.encode_style(data_A2, label=1)
-                else:
-                    # s_a = m.encode_style(data_A, label=0)
-                    s_a2 = m.encode_style(data_A2, label=0)
                 with torch.no_grad():
-                    if(atob):
-                        # res, _, _ = m(data_A, label=1, cross=False, s_given=s_a2)
+                    if(args.atob):
+                        s_a2 = m.encode_style(data_A2, label=1)
                         quant, diff, _, _ = m.encode(data_A, 1)
                         output = m.decode_a(quant, s_a2)
                     else:
+                        s_a2 = m.encode_style(data_A2, label=0)
                         quant, diff, _, _ = m.encode(data_A, 0)
                         output = m.decode_b(quant, s_a2)
-                        # res, _, _ = m(data_A, label=0, cross=False, s_given=s_a2)
-                save_tensor(output, cur_dir, 'trans_intra_{}.jpg'.format(i))                
-            
-            '''
-            # for idx2, data_B in enumerate(test_loader_b):
-            for idx2, _ in enumerate(test_loader_b):
-                if idx2 == 1: # num of collections
-                    break
-                data_B = validation_data_b[random.randint(0, len(validation_data_b)-1)].unsqueeze(0)
-                data_B = data_B.to(device)
+                save_tensor(output, cur_dir, 'trans_intra_{}.jpg'.format(i))
+        
+        for idx2, _ in enumerate(test_loader_b):
+            if idx2 == 3: # generate 3 translation for each
+                break
+            data_B = validation_data_b[random.randint(0, len(validation_data_b)-1)].unsqueeze(0)
+            data_B = data_B.to(device)
 
-                # img_name_b = test_img_name_b[idx2].rsplit('/', 1)[-1]
-                if(atob):
-                    # s_a = m.encode_style(data_A, label=1)
+            img_name_b = test_img_name_b[idx2].rsplit('/', 1)[-1]
+            with torch.no_grad():
+                if(args.atob):
                     s_b = m.encode_style(data_B, label=0)
+                    AcBs, _, _ = m(data_A, label=1, cross=True, s_given=s_b)
                 else:
-                    # s_a = m.encode_style(data_A, label=0)
                     s_b = m.encode_style(data_B, label=1)
-                with torch.no_grad():
-                    if(atob):
-                        AcBs, _, _ = m(data_A, label=1, cross=True, s_given=s_b)
-                    else:
-                        AcBs, _, _ = m(data_A, label=0, cross=True, s_given=s_b)
-                    res = AcBs
-                save_tensor(res, cur_dir, 'trans_{}.jpg'.format(idx2))
-                save_tensor(data_B, cur_dir, 'style.jpg')
+                    AcBs, _, _ = m(data_A, label=0, cross=True, s_given=s_b)
+            save_tensor(AcBs, cur_dir, 'trans_{}.jpg'.format(idx2))
+            # save_tensor(data_B, cur_dir, 'style_{}.jpg'.format(img_name_b))
+        
