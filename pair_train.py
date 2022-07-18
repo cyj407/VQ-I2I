@@ -37,11 +37,11 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--device", default='4',
+    parser.add_argument("--device", default='0',
                     help="specify the GPU(s)",
                     type=str)
 
-    parser.add_argument("--root_dir", default='/eva_data0/dataset/',
+    parser.add_argument("--root_dir", default='/eva_data0/dataset/cityscapes',
                     help="dataset path",
                     type=str)
 
@@ -62,7 +62,7 @@ if __name__ == "__main__":
                     type=int)
     
 
-    parser.add_argument("--epoch_start", default=0,
+    parser.add_argument("--epoch_start", default=1,
                     help="start from",
                     type=int)
 
@@ -85,11 +85,9 @@ if __name__ == "__main__":
     
     save_path = '{}_{}_{}_pair'.format(args.dataset, args.ed, args.ne)    # model dir
     print(save_path)
-    root = os.path.join(args.root_dir, args.dataset)
-
 
     # load data
-    train_data = dataset_pair(root, 'train', img_size, img_size)
+    train_data = dataset_pair(args.root_dir, 'train', img_size, img_size)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True)
 
 

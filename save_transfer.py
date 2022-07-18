@@ -106,7 +106,7 @@ if __name__ == "__main__":
                     help="specify the GPU(s)",
                     type=str)
 
-    parser.add_argument("--root_dir", default='/eva_data0/dataset/',
+    parser.add_argument("--root_dir", default='/eva_data0/dataset/summer2winter_yosemite/',
                     help="dataset path",
                     type=str)
 
@@ -153,15 +153,14 @@ if __name__ == "__main__":
 
 
     # dataloader
-    root = os.path.join(args.root_dir, args.dataset)
     mode = 'test'   # or 'train'
     img_size = 256
     if(args.atob):
-        validation_data_a = dataset_single(root, mode, 'A', img_size, img_size, flip=False)
-        validation_data_b = dataset_single(root, mode, 'B', img_size, img_size, flip=False)
+        validation_data_a = dataset_single(args.root_dir, mode, 'A', img_size, img_size, flip=False)
+        validation_data_b = dataset_single(args.root_dir, mode, 'B', img_size, img_size, flip=False)
     else:
-        validation_data_a = dataset_single(root, mode, 'B', img_size, img_size, flip=False)
-        validation_data_b = dataset_single(root, mode, 'A', img_size, img_size, flip=False)
+        validation_data_a = dataset_single(args.root_dir, mode, 'B', img_size, img_size, flip=False)
+        validation_data_b = dataset_single(args.root_dir, mode, 'A', img_size, img_size, flip=False)
 
     ############################
     

@@ -1,5 +1,7 @@
 # VQ-I2I
 ## Environment
+- Prerequisities: Python 3.6 & Pytorch (at least 1.4.0) 
+- We provide a conda environment script, please run the following command after cloning our repo.
 ```
 conda env create -f vqi2i_env.yml
 ```
@@ -14,10 +16,11 @@ python unpair_train.py
 python pair_train.py
 ```
 ### Test (unpaired I2I only.)
-- Save thetranslation results.
+- Save the translation results.
 ```
-python save_transfer.py
+python save_transfer.py --root_dir <dataset_path> --dataset <dataset_name> --checkpoint_model <checkpoint_path>
 ```
+
 ## Second stage -- image generation and extension
 ### Train
 ```
