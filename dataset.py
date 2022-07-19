@@ -65,13 +65,14 @@ class dataset_single(data.Dataset):
 
 
 class dataset_single_enc_sty(data.Dataset):
-    def __init__(self, root, mode, _class, model, device, resize=256, cropsize=256):
+    def __init__(self, root, mode, _class, model, device, resize=256, cropsize=256, flip=False):
         self.root = root
         
         # style information
         self.vqi2i = model
         self.device = device
         self.label = 1 if _class == 'A' else 0
+        self.flip = flip
         
         images = os.listdir(os.path.join(self.root, mode + _class))
         self.img_path = [os.path.join(self.root, mode + _class, x) for x in images]
@@ -107,14 +108,18 @@ class dataset_single_enc_sty(data.Dataset):
 
     def load_img(self, img_name, input_dim):
         _img = Image.open(img_name).convert('RGB')
-        img = self.transforms(_img)        
-        img = img.unsqueeze(0) # make tensor2im workable
+        img = self.transforms(_img).unsqueeze(0) # make tensor2im workable
         
         style = self.vqi2i.encode_style( img.to(self.device), self.label)
         print('Image Path: {}'.format(img_name))
-        return {'img_name': img_name.split('/')[-1], 
-                'image': img.to(self.device), 'style': style, 'label': self.label}
-
+        if self.flip:
+            flip_img = self.transforms_flip(_img).unsqueeze(0)
+            return {'img_name': img_name.split('/')[-1],
+                    'flip_image': flip_img.to(self.device), 
+                    'image': img.to(self.device), 'style': style, 'label': self.label}
+        else:
+            return {'img_name': img_name.split('/')[-1],
+                    'image': img.to(self.device), 'style': style, 'label': self.label}            
 
 class dataset_unpair(data.Dataset):
     def __init__(self, root, mode, class_1, class_2, resize=256, cropsize=256):
