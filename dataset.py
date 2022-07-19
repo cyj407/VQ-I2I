@@ -63,6 +63,59 @@ class dataset_single(data.Dataset):
     def get_img_name(self):
         return self.A
 
+
+class dataset_single_enc_sty(data.Dataset):
+    def __init__(self, root, mode, _class, model, device, resize=256, cropsize=256):
+        self.root = root
+        
+        # style information
+        self.vqi2i = model
+        self.device = device
+        self.label = 1 if _class == 'A' else 0
+        
+        images = os.listdir(os.path.join(self.root, mode + _class))
+        self.img_path = [os.path.join(self.root, mode + _class, x) for x in images]
+        self.dataset_size = len(self.img_path)
+        self.input_dim = 3
+
+        ## resize size
+        transforms = [Resize((resize, resize), Image.BICUBIC)]
+        if(mode == 'train'):
+            transforms.append(RandomCrop(cropsize))
+        else:
+            transforms.append(CenterCrop(cropsize))
+
+        transforms_flip = transforms.copy()
+        transforms_flip.append(RandomHorizontalFlip(p=1))
+
+        transforms.append(ToTensor())
+        transforms.append(Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]))
+
+        transforms_flip.append(ToTensor())
+        transforms_flip.append(Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]))
+
+        self.transforms = Compose(transforms)
+        self.transforms_flip = Compose(transforms_flip)
+        return
+
+    def __getitem__(self, index):
+        print('Index: {}'.format(index))
+        return self.load_img(self.img_path[index], self.input_dim)
+        
+    def __len__(self):
+        return self.dataset_size
+
+    def load_img(self, img_name, input_dim):
+        _img = Image.open(img_name).convert('RGB')
+        img = self.transforms(_img)        
+        img = img.unsqueeze(0) # make tensor2im workable
+        
+        style = self.vqi2i.encode_style( img.to(self.device), self.label)
+        print('Image Path: {}'.format(img_name))
+        return {'img_name': img_name.split('/')[-1], 
+                'image': img.to(self.device), 'style': style, 'label': self.label}
+
+
 class dataset_unpair(data.Dataset):
     def __init__(self, root, mode, class_1, class_2, resize=256, cropsize=256):
         self.root = root

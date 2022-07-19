@@ -4,7 +4,7 @@ from taming_comb.modules.style_encoder.network import *
 from taming_comb.modules.diffusionmodules.model import * 
 from taming_comb.models.cond_transformer import * 
 from dataset import dataset_single_enc_sty
-from utils import gen_uncond_indices, save_tensor
+from utils import get_rand_input, get_coord_idx, sample_gen, save_tensor
 
 
 torch.cuda.empty_cache()
@@ -33,7 +33,7 @@ if __name__=="__main__":
                     help="transformer model (second stage model)",
                     type=str)
 
-    parser.add_argument("--save_name", default='./summer2winter_yosemite_uncond_gen',
+    parser.add_argument("--save_name", default='./summer2winter_yosemite_extension',
                     help="save directory name",
                     type=str)
 
@@ -41,10 +41,24 @@ if __name__=="__main__":
                     help="the total generation number",
                     type=int)
 
+    parser.add_argument("--input_domain", default='B',
+                    choices=['A', 'B'],
+                    help="the input image domain",
+                    type=str)
+
     parser.add_argument("--sty_domain", default='A',
                     choices=['A', 'B'],
-                    help="the domain of unconditional generation (A or B)",
+                    help="the generated image domain",
                     type=str)
+
+    parser.add_argument("--pure_extension", default=False,
+                    help="set True to only extend the content domain image without translation",
+                    type=str)
+
+    parser.add_argument("--extend_w", default=128,
+                    choices=[128, 192],
+                    help="extend pixels ()",
+                    type=int)
 
     parser.add_argument("--ne", default=512,
                     help="the number of embedding",
@@ -81,18 +95,37 @@ if __name__=="__main__":
     print('Finish Loading!')
     
     os.makedirs(args.save_name, exist_ok=True)
-
+    latent_w = args.extend_w // 16 + 16
     codebook_size = 512
-    test_set = dataset_single_enc_sty(args.root_dir, 'test', args.sty_domain, model.first_stage_model, device)
+    coord_idx = get_coord_idx(model, device)
+    content_set = dataset_single_enc_sty(args.root_dir, 'test', args.input_domain, model.first_stage_model, device)
+    style_set = dataset_single_enc_sty(args.root_dir, 'test', args.sty_domain, model.first_stage_model, device)
 
-    for i in range(args.sample_num):
+    ## load test images
+    for i in range(len(content_set)):
+        if i == args.sample_num:
+            break
 
-        content_idx = gen_uncond_indices(model, device, target_code_size=16)
+        print(i)
+        img = content_set[i]
 
-        style_ref_img = test_set[random.randint(0, len(test_set)-1)]
+        _, z_indices, _ = model.encode_to_z(img['image'], img['label']) # [1, 256]
+        
+        # new_idx contains z_indices + random indices
+        new_idx = get_rand_input(device, z_indices, w=latent_w)
 
-        test_samples = model.decode_to_img(content_idx, 
+        # gen_img = sythesize(idx, img['style'], label=img['label'], return_idx=False)
+        content_idx = sample_gen(new_idx, coord_idx, model,
+                    z_code_shape=(1, codebook_size, 16, latent_w))
+        
+        if args.pure_extension:
+            test_samples = model.decode_to_img(content_idx, 
                               (1, codebook_size, content_idx.shape[1], content_idx.shape[2]),
-                              style_ref_img['style'], style_ref_img['label'])
+                              img['style'], img['label'])
+        else:
+            style_img = style_set[random.randint(0, len(style_set)-1)]
+            test_samples = model.decode_to_img(content_idx, 
+                                (1, codebook_size, content_idx.shape[1], content_idx.shape[2]),
+                                style_img['style'], style_img['label'])
 
-        save_tensor(test_samples, args.save_name, '{}_{}'.format(i, style_ref_img['img_name']))
+        save_tensor(test_samples, args.save_name, 'extend{}_{}'.format(args.extend_w, img['img_name']))
