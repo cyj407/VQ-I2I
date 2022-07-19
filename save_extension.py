@@ -17,7 +17,7 @@ def gen_content_indices(model, img, label, latent_w):
     # new_idx contains z_indices + random indices
     new_idx = get_rand_input(device, z_indices, w=latent_w)
 
-    return sample_gen(new_idx, coord_idx, model,
+    return sample_gen(new_idx, coord_idx, model, original_h=16, original_w=16, # original latent size 16x16
                 z_code_shape=(1, codebook_size, 16, latent_w))
 
 
@@ -64,7 +64,7 @@ if __name__=="__main__":
                     type=str)
 
     parser.add_argument("--double_extension", default=False,
-                    help="set True to only extend the content domain image without translation",
+                    help="set True to extend double side",
                     type=str)
 
     parser.add_argument("--pure_extension", default=False,
@@ -73,7 +73,7 @@ if __name__=="__main__":
 
     parser.add_argument("--extend_w", default=128,
                     choices=[128, 192],
-                    help="extend pixels ()",
+                    help="extend for 128/192 pixels",
                     type=int)
 
     parser.add_argument("--ne", default=512,
@@ -150,6 +150,6 @@ if __name__=="__main__":
                                 (1, codebook_size, content_idx.shape[1], content_idx.shape[2]),
                                 style_img['style'], style_img['label'])
         # right_256_tensor = test_samples[:, :, :, -256:] # rightmost 256x256 pixels
-
+        save_tensor(img['image'], args.save_name, 'input_{}'.format(img['img_name']))
         save_tensor(test_samples, args.save_name, 'extend{}_{}'.format(args.extend_w, img['img_name']))
         

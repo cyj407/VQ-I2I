@@ -4,7 +4,7 @@ from taming_comb.modules.style_encoder.network import *
 from taming_comb.modules.diffusionmodules.model import * 
 from taming_comb.models.cond_transformer import * 
 from dataset import dataset_single_enc_sty
-from utils import gen_uncond_indices, save_tensor
+from utils import get_rand_input, get_coord_idx, sample_gen, save_tensor
 
 
 torch.cuda.empty_cache()
@@ -33,7 +33,7 @@ if __name__=="__main__":
                     help="transformer model (second stage model)",
                     type=str)
 
-    parser.add_argument("--save_name", default='./summer2winter_yosemite_uncond_gen',
+    parser.add_argument("--save_name", default='./summer2winter_yosemite_completion',
                     help="save directory name",
                     type=str)
 
@@ -41,9 +41,23 @@ if __name__=="__main__":
                     help="the total generation number",
                     type=int)
 
+    parser.add_argument("--input_domain", default='B',
+                    choices=['A', 'B'],
+                    help="the input image domain",
+                    type=str)
+
     parser.add_argument("--sty_domain", default='A',
                     choices=['A', 'B'],
-                    help="the domain of unconditional generation (A or B)",
+                    help="the generated image domain",
+                    type=str)
+
+    parser.add_argument("--pure_completion", default=True,
+                    help="set True to only complete the input domain image without translation",
+                    type=str)
+
+    parser.add_argument("--partial_input", default='top-left',
+                    choices=['top-left', 'left-half', 'top-half'],
+                    help="top-left: given 1/4 of top-left corner image",
                     type=str)
 
     parser.add_argument("--ne", default=512,
@@ -57,7 +71,8 @@ if __name__=="__main__":
     parser.add_argument("--z_channel",default=256,
                     help="z channel",
                     type=int)
-    
+
+
     args = parser.parse_args()
 
     os.environ["CUDA_VISIBLE_DEVICES"] = args.device
@@ -84,17 +99,42 @@ if __name__=="__main__":
     print('Finish Loading!')
     
     os.makedirs(args.save_name, exist_ok=True)
+    coord_idx = get_coord_idx(model, device)
+    content_set = dataset_single_enc_sty(args.root_dir, 'test', args.input_domain, model.first_stage_model, device)
+    style_set = dataset_single_enc_sty(args.root_dir, 'test', args.sty_domain, model.first_stage_model, device)
+    if args.partial_input == 'top-left':
+        div_w, div_h = 2, 2
+    elif args.partial_input == 'left-half':
+        div_w, div_h = 2, 1
+    else: # top-half
+        div_w, div_h = 1, 2
 
-    test_set = dataset_single_enc_sty(args.root_dir, 'test', args.sty_domain, model.first_stage_model, device)
 
-    for i in range(args.sample_num):
+    ## load test images
+    for i in range(len(content_set)):
+        if i == args.sample_num:
+            break
 
-        content_idx = gen_uncond_indices(model, device, target_code_size=16, codebook_size=args.ne)
+        print(i)
+        img = content_set[i]
 
-        style_ref_img = test_set[random.randint(0, len(test_set)-1)]
+        _, z_indices, _ = model.encode_to_z(img['image'], img['label']) # [1, 256]
+        
+        # new_idx contains z_indices + random indices
+        new_idx = get_rand_input(device, z_indices, h=16, w=16, div_w=div_w, div_h=div_h, codebook_size=args.ne)
 
-        test_samples = model.decode_to_img(content_idx, 
+        content_idx = sample_gen(new_idx, coord_idx, model, original_h=16//div_h, original_w=16//div_w,
+                    z_code_shape=(1, args.ne, 16, 16))
+        
+        if args.pure_completion:
+            test_samples = model.decode_to_img(content_idx, 
                               (1, args.ne, content_idx.shape[1], content_idx.shape[2]),
-                              style_ref_img['style'], style_ref_img['label'])
+                              img['style'], img['label'])
+        else:
+            style_img = style_set[random.randint(0, len(style_set)-1)]
+            test_samples = model.decode_to_img(content_idx, 
+                                (1, args.ne, content_idx.shape[1], content_idx.shape[2]),
+                                style_img['style'], style_img['label'])
 
-        save_tensor(test_samples, args.save_name, '{}_{}'.format(i, style_ref_img['img_name']))
+        save_tensor(test_samples, args.save_name, 'inpaint_{}_{}'.format(args.partial_input, img['img_name']))
+        save_tensor(img['image'], args.save_name, 'input_{}'.format( img['img_name']))

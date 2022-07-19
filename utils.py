@@ -75,7 +75,7 @@ def instantiate_from_config(config):
     return get_obj_from_str(config["target"])(**config.get("params", dict()))
 
 
-def get_rand_input(device, condition=None, h=16, w=28, original_w=16, original_h=16, codebook_size=512):
+def get_rand_input(device, condition=None, h=16, w=28, original_w=16, original_h=16, codebook_size=512, div_w=1, div_h=1):
     z_random = torch.randint(codebook_size, (w*h,)).to(device) # [400]
     z_random = z_random.reshape( 1, h, w) # [1, 20, 20]    
     
@@ -83,7 +83,7 @@ def get_rand_input(device, condition=None, h=16, w=28, original_w=16, original_h
         return z_random
     else:
         # set left-top part as the input image
-        z_random[:, :original_h, :original_w] = condition.reshape( 1, original_h, original_w)
+        z_random[:, :original_h//div_h, :original_w//div_w] = condition.reshape( 1, original_h, original_w)[:, :original_h//div_h, :original_w//div_w]
 
         ## idx as the input (original + random)
         return z_random.detach().clone() # [1, 20, 20]
@@ -104,7 +104,7 @@ def get_coord_idx(model, device, target_code_size=16):
     return cidx
 
 
-def sample_gen(idx, coord_idx, model, z_code_shape, temperature=2.0, top_k=5):
+def sample_gen(idx, coord_idx, model, z_code_shape, original_w=0, original_h=0, temperature=2.0, top_k=5):
 
     start_t = time.time()
     window_size = 16
@@ -131,29 +131,31 @@ def sample_gen(idx, coord_idx, model, z_code_shape, temperature=2.0, top_k=5):
             j_start = j-local_j
             j_end = j_start+int(window_size)
             
-            patch = idx[:,i_start:i_end,j_start:j_end]
-            patch = patch.reshape(patch.shape[0],-1)
-            cpatch = coord_idx[:, i_start:i_end, j_start:j_end]
-            cpatch = cpatch.reshape(cpatch.shape[0], -1)
+            if(i >= original_h or j >= original_w):
 
-            patch = torch.cat((cpatch, patch), dim=1)
-            logits,_ = model.transformer(patch[:,:-1]) # [1, x, 512]
-            logits = logits[:, -window_size*window_size:, :] # [1, 256, 512]
-            logits = logits.reshape(z_code_shape[0],window_size,window_size,-1)  # [1, 16, 16, 512]
-            logits = logits[:,local_i,local_j,:] # [1, 512]   
+                patch = idx[:,i_start:i_end,j_start:j_end]
+                patch = patch.reshape(patch.shape[0],-1)
+                cpatch = coord_idx[:, i_start:i_end, j_start:j_end]
+                cpatch = cpatch.reshape(cpatch.shape[0], -1)
 
-            logits = logits/temperature # small not equal
+                patch = torch.cat((cpatch, patch), dim=1)
+                logits,_ = model.transformer(patch[:,:-1]) # [1, x, 512]
+                logits = logits[:, -window_size*window_size:, :] # [1, 256, 512]
+                logits = logits.reshape(z_code_shape[0],window_size,window_size,-1)  # [1, 16, 16, 512]
+                logits = logits[:,local_i,local_j,:] # [1, 512]   
 
-            if top_k is not None:
-                logits = model.top_k_logits(logits, top_k)
+                logits = logits/temperature # small not equal
 
-            probs = torch.nn.functional.softmax(logits, dim=-1)
-            idx[:,i,j] = torch.multinomial(probs, num_samples=1)
+                if top_k is not None:
+                    logits = model.top_k_logits(logits, top_k)
+
+                probs = torch.nn.functional.softmax(logits, dim=-1)
+                idx[:,i,j] = torch.multinomial(probs, num_samples=1)
     print(f"Time: {time.time() - start_t} seconds")
     return idx
 
 def gen_uncond_indices(model, device, target_code_size=16, codebook_size=512):
-    rand_idx = get_rand_input(device, condition=None, h=target_code_size, w=target_code_size)
+    rand_idx = get_rand_input(device, condition=None, codebook_size=codebook_size, h=target_code_size, w=target_code_size)
     coord_idx = get_coord_idx(model, device)
     gen_content_idx = sample_gen(rand_idx, coord_idx, model,
                         z_code_shape=(1, codebook_size, target_code_size, target_code_size), 
