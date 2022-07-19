@@ -23,16 +23,11 @@ import argparse
 from IPython.display import clear_output
 import time
 import random
-import argparse
 
 
-original_size = 16
-# size = 20
-h, w = 16, 24
-div = 2
 codebook_size = 512
 window_size = 16
-z_code_shape = (1, codebook_size,  h, w)
+z_code_shape = (1, codebook_size,  16, 16)
 
 def show_image(s):
     s = s.detach().cpu().numpy().transpose(0,2,3,1)[0]
@@ -78,7 +73,7 @@ class dataset_single(data.Dataset):
         return self.load_img(self.img_path[index], self.input_dim)
         
     def __len__(self):
-        return self.size
+        return self.dataset_size
 
     def load_img(self, img_name, input_dim):
         _img = Image.open(img_name).convert('RGB')
@@ -92,9 +87,7 @@ class dataset_single(data.Dataset):
         # flip_style = self.vqi2i.encode_style( flip_img.to(device), self.label)
         print('Image Path: {}'.format(img_name))
         return {'img_name': img_name.split('/')[-1], 
-                'image': img.to(device), 'style': style,
-                # 'flip_image': flip_img.to(device), 'flip_style': flip_style, 
-                'label': self.label}
+                'image': img.to(device), 'style': style, 'label': self.label}
 
 def tensor2im(input_image, imtype=np.uint8):
     """"Converts a Tensor array into a numpy image array.
@@ -140,99 +133,6 @@ def save_tensor(im_data, image_dir, image_name):
     save_path = os.path.join(image_dir, str(image_name)) #+ '.png'
     save_image(im, save_path)
 
-
-def get_content_z(img, label):
-    # get content z_code
-    z_code, z_indices, _ = model.encode_to_z(img, label) # [1, 256]
-    z_indices_shape = z_indices.shape
-    return z_code, z_indices, z_indices_shape
-
-
-def show_recon(z_indices, style, label, img):
-    print('Reconstruction')
-    x_sample = model.decode_to_img(
-        z_indices.reshape(z_code_shape[0], original_size, original_size), 
-        (z_code_shape[0], codebook_size, original_size, original_size), style, label)
-    show_image(x_sample)
-    print(nn.L1Loss()(img, x_sample))
-    print('---------------------------------')
-    return x_sample
-
-def get_rand_input(z_indices):
-    
-    z_random = torch.randint(codebook_size, (h*w,)).to(device) # [400]
-    z_random = z_random.reshape(z_code_shape[0], h, w) # [1, 20, 20]
-
-    # set left-top part as the input image (256x256)
-    z_random[:, :h, :8] = z_indices.reshape(z_code_shape[0], h, 8)
-
-    ## idx as the input (original + random)
-    idx = z_random.detach().clone() # [1, 20, 20]
-    return idx
-
-def get_timestep():
-    import time
-    ts = time.time()
-    import datetime
-    st = datetime.datetime.fromtimestamp(ts).strftime('%m%d_%H_%M_%S')
-    return st
-
-def sythesize(idx, style, label, z_code_shape=z_code_shape, temperature=2.0, top_k=5, return_idx=True):
-    start_t = time.time()
-    # print(z_code_shape)
-    for i in range(0, z_code_shape[2]-0):
-        if i <= window_size//2:
-            local_i = i
-        elif (z_code_shape[2]-i) < window_size//2:
-            local_i = window_size -(z_code_shape[2]-i)
-        else:
-            local_i = window_size//2
-
-        for j in range(0,z_code_shape[3]-0):
-            if j <= window_size//2:
-                local_j = j
-            elif (z_code_shape[3]-j) < window_size//2:
-                local_j = window_size - (z_code_shape[3]-j)
-            else:
-                local_j = window_size//2
-
-            i_start = i-local_i
-            i_end = i_start+int(window_size)
-            j_start = j-local_j
-            j_end = j_start+int(window_size)
-            
-            if(i >= original_size or j >= original_size):
-
-                patch = idx[:,i_start:i_end,j_start:j_end]
-                patch = patch.reshape(patch.shape[0],-1)
-                cpatch = cidx[:, i_start:i_end, j_start:j_end]
-                cpatch = cpatch.reshape(cpatch.shape[0], -1)
-
-                patch = torch.cat((cpatch, patch), dim=1)
-                logits,_ = model.transformer(patch[:,:-1]) # [1, x, 512]
-                logits = logits[:, -window_size*window_size:, :] # [1, 256, 512]
-                logits = logits.reshape(z_code_shape[0],window_size,window_size,-1)  # [1, 16, 16, 512]
-                logits = logits[:,local_i,local_j,:] # [1, 512]   
-
-                logits = logits/temperature # small not equal
-
-                if top_k is not None:
-                    logits = model.top_k_logits(logits, top_k)
-
-                probs = torch.nn.functional.softmax(logits, dim=-1)
-                idx[:,i,j] = torch.multinomial(probs, num_samples=1)
-        
-    #         print(f"Step: ({i},{j}) | Local: ({local_i},{local_j}) | Crop: ({i_start}:{i_end},{j_start}:{j_end})")
-    #         x_sample = model.decode_to_img(idx, (1, codebook_size, h, w), style, label)
-    #         show_image(x_sample)
-    print(f"Time: {time.time() - start_t} seconds")
-    if(return_idx):
-        return idx
-    x_sample = model.decode_to_img(idx, (1, codebook_size, h, w), style, label)
-    print(f"Step: ({i},{j}) | Local: ({local_i},{local_j}) | Crop: ({i_start}:{i_end},{j_start}:{j_end})")
-    
-    return x_sample
-
 def get_obj_from_str(string, reload=False):
     module, cls = string.rsplit(".", 1)
     if reload:
@@ -240,11 +140,96 @@ def get_obj_from_str(string, reload=False):
         importlib.reload(module_imp)
     return getattr(importlib.import_module(module, package=None), cls)
 
-
 def instantiate_from_config(config):
     if not "target" in config:
         raise KeyError("Expected key `target` to instantiate.")
     return get_obj_from_str(config["target"])(**config.get("params", dict()))
+
+
+def get_rand_input(condition=None, h=16, w=28, original_w=16, original_h=16):
+    z_random = torch.randint(codebook_size, (w*h,)).to(device) # [400]
+    z_random = z_random.reshape(z_code_shape[0], h, w) # [1, 20, 20]    
+    
+    if(condition == None):
+        return z_random
+    else:
+        # set left-top part as the input image
+        z_random[:, :original_h, :original_w] = condition.reshape(z_code_shape[0], original_h, original_w)
+
+        ## idx as the input (original + random)
+        return z_random.detach().clone() # [1, 20, 20]
+
+
+def get_cidx(target_code_size=16):
+    # coordinate encode as condition
+    c_size = 256//16 * target_code_size # original image size
+    coordinate = np.arange(c_size*c_size).reshape(c_size,c_size,1)/(c_size*c_size)
+    coordinate = torch.from_numpy(coordinate) # [256, 256, 1]
+    c = model.get_c(coordinate) # [1, 1, 256, 256]
+    c = c.to(device)
+
+    # encode with condition
+    _, cidx = model.encode_to_c(c) # [1, 256]
+    cidx = cidx.reshape(z_code_shape[0], target_code_size, target_code_size) # [1, 16, 16]
+
+    return cidx
+
+
+def sample_gen(idx, style, cidx, z_code_shape, temperature=2.0, top_k=150, return_idx=False):
+
+    start_t = time.time()
+    print(z_code_shape)
+    for i in range(0, z_code_shape[2]-0):
+      if i <= window_size//2:
+        local_i = i
+      elif (z_code_shape[2]-i) < window_size//2:
+        local_i = window_size -(z_code_shape[2]-i)
+      else:
+        local_i = window_size//2
+      for j in range(0,z_code_shape[3]-0):
+
+        if j <= window_size//2:
+          local_j = j
+        elif (z_code_shape[3]-j) < window_size//2:
+          local_j = window_size - (z_code_shape[3]-j)
+        else:
+          local_j = window_size//2
+
+        i_start = i-local_i
+        i_end = i_start+int(window_size)
+        j_start = j-local_j
+        j_end = j_start+int(window_size)
+        
+        patch = idx[:,i_start:i_end,j_start:j_end]
+        patch = patch.reshape(patch.shape[0],-1)
+        cpatch = cidx[:, i_start:i_end, j_start:j_end]
+        cpatch = cpatch.reshape(cpatch.shape[0], -1)
+
+        patch = torch.cat((cpatch, patch), dim=1)
+        logits,_ = model.transformer(patch[:,:-1]) # [1, x, 512]
+        logits = logits[:, -window_size*window_size:, :] # [1, 256, 512]
+        logits = logits.reshape(z_code_shape[0],window_size,window_size,-1)  # [1, 16, 16, 512]
+        logits = logits[:,local_i,local_j,:] # [1, 512]   
+
+        logits = logits/temperature # small not equal
+
+        if top_k is not None:
+          logits = model.top_k_logits(logits, top_k)
+
+        probs = torch.nn.functional.softmax(logits, dim=-1)
+        idx[:,i,j] = torch.multinomial(probs, num_samples=1)
+    print(f"Time: {time.time() - start_t} seconds")
+    if(return_idx):
+        return idx
+
+
+def gen_uncond_indices(target_code_size=16):
+    idx = get_rand_input(condition=None, h=target_code_size, w=target_code_size)
+    cidx = get_cidx()
+    gen_idx = sample_gen(idx, _, cidx,
+                        z_code_shape=(1, codebook_size, target_code_size, target_code_size), 
+                        return_idx=True, temperature=5.0, top_k=2)
+    return gen_idx
 
 
 
@@ -275,6 +260,18 @@ if __name__=="__main__":
                     help="transformer model (second stage model)",
                     type=str)
 
+    parser.add_argument("--save_name", default='./summer2winter_yosemite_uncond_gen',
+                    help="save directory name",
+                    type=str)
+
+    parser.add_argument("--sample_num", default=10,
+                    help="the total generation number",
+                    type=int)
+
+    parser.add_argument("--sty_domain", default='A',
+                    help="the domain of unconditional generation (A or B)",
+                    type=str)
+
     parser.add_argument("--ne", default=512,
                     help="the number of embedding",
                     type=int)
@@ -283,52 +280,35 @@ if __name__=="__main__":
                     help="embedding dimension",
                     type=int)
 
-    parser.add_argument("--z_channel",default=128,
+    parser.add_argument("--z_channel",default=256,
                     help="z channel",
                     type=int)
     
-
-    parser.add_argument("--epoch_start", default=1,
-                    help="start from",
-                    type=int)
-
-    parser.add_argument("--epoch_end", default=1000,
-                    help="end at",
-                    type=int)
-
     args = parser.parse_args()
 
     os.environ["CUDA_VISIBLE_DEVICES"] = args.device
-
-    # ONLY MODIFY SETTING HERE
     device = torch.device('cuda:0' if torch.cuda.is_available() else "cpu")
     print('device: ', device)
 
-
-    f = '/eva_data7/VQ-I2I/summer2winter_yosemite_512_512_transformer_final_test/n_700.pt' 
-    #os.path.join(os.getcwd(), 'n_700.pt')
-
+    # load first stage + second stage model
     transformer_config = OmegaConf.load('transformer.yaml')
-    transformer_config.model.params.f_path = #os.path.join(
-        args.first_stage_model, 
-        # os.getcwd(), 'summer2winter_disentangle_model', 'new_latest.pt')
-    transformer_config.model.params.device = str(device)
+    transformer_config.model.params.f_path = args.first_stage_model
     transformer_config.model.params.first_stage_model_config.params.embed_dim = args.ed
     transformer_config.model.params.first_stage_model_config.params.n_embed = args.ne
+    transformer_config.model.params.first_stage_model_config.params.ddconfig.z_channels = args.z_channel
+    transformer_config.model.params.device = str(device)
     model = instantiate_from_config(transformer_config.model)
-
-
-    if(os.path.isfile(f)):
-        print('load ' + f)
-        ck = torch.load(f, map_location=device)
+    if(os.path.isfile(args.transformer_model)):
+        print('load ' + args.transformer_model)
+        ck = torch.load( args.transformer_model, map_location=device)
         model.load_state_dict(ck['model_state_dict'], strict=False)
     model = model.to(device)
     model.eval()
-
     print('Finish Loading!')
+    
+    os.makedirs(args.save_name, exist_ok=True)
 
-
-    # coordinate encode as condition
+    # encode coordinate as condition
     c_size = 256 # original image size
     coordinate = np.arange(c_size*c_size).reshape(c_size,c_size,1)/(c_size*c_size)
     coordinate = torch.from_numpy(coordinate) # [256, 256, 1]
@@ -340,50 +320,21 @@ if __name__=="__main__":
     cidx = cidx.reshape(z_code_shape[0], 16, 16) # [1, 16, 16]
 
 
-    save_dir = 'l2r_eccv_ext256_res'
-    full_path = os.path.join(os.getcwd(), save_dir, 'full')
-    right256 = os.path.join(os.getcwd(), save_dir, 'right256')
+    if args.sty_domain == 'A':
+        testA_set = dataset_single(args.root_dir, 'test', 'A', model.first_stage_model)
+    else:
+        testB_set = dataset_single(args.root_dir, 'test', 'B', model.first_stage_model)
 
-    os.makedirs(full_path, exist_ok=True)
-    os.makedirs(right256, exist_ok=True)
+    for i in range(args.sample_num):
 
-    
-    # A class
-    testA_set = dataset_single(args.root_dir, 'test', 'A', model.first_stage_model)
-    ## load test images
-    for i in range(len(testA_set)):
-        print(i)
-        img = testA_set[i] # 2
-        _, z_indices, z_indices_shape = get_content_z(img['image'], img['label'])
-        z_indices = z_indices.reshape(1, 16, 16)
+        content_idx = gen_uncond_indices(target_code_size=16)
 
-        # only extract partial indices
-        z_indices = z_indices[:,:z_indices.shape[1], :z_indices.shape[2]//div]
+        if args.sty_domain == 'A':
+            style_ref_img = testA_set[random.randint(0, testA_set.size-1)]
+        else:
+            style_ref_img = testB_set[random.randint(0, testB_set.size-1)]
+        test_samples = model.decode_to_img(content_idx, 
+                              (1, codebook_size, content_idx.shape[1], content_idx.shape[2]),
+                              style_ref_img['style'], style_ref_img['label'])
 
-        idx = get_rand_input(z_indices)
-
-        gen_img = sythesize(idx, img['style'], label=img['label'], return_idx=False)
-        right_256_tensor = gen_img[:, :, :, -256:]
-        
-        save_tensor(gen_img, full_path, img['img_name'])
-        save_tensor(right_256_tensor, right256, img['img_name'])
-
-    # B class
-    testA_set = dataset_single(args.root_dir, 'test', 'B', model.first_stage_model)
-    ## load test images
-    for i in range(len(testA_set)):
-        print(i)
-        img = testA_set[i] # 2
-        _, z_indices, z_indices_shape = get_content_z(img['image'], img['label'])
-        z_indices = z_indices.reshape(1, 16, 16)
-
-        # only extract partial indices
-        z_indices = z_indices[:,:z_indices.shape[1], :z_indices.shape[2]//div]
-
-        idx = get_rand_input(z_indices)
-
-        gen_img = sythesize(idx, img['style'], label=img['label'], return_idx=False)
-        right_256_tensor = gen_img[:, :, :, -256:]
-        
-        save_tensor(gen_img, full_path, img['img_name'])
-        save_tensor(right_256_tensor, right256, img['img_name'])
+        save_tensor(test_samples, args.save_name, '{}_{}'.format(i, style_ref_img['img_name']))
