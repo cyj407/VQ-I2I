@@ -52,7 +52,7 @@ if __name__ == "__main__":
                     help="dataset directory name",
                     type=str)
 
-    parser.add_argument("--first_stage_model", default='/eva_data7/VQ-I2I/summer2winter_yosemite_512_512_settingc_256_final_test/',
+    parser.add_argument("--first_stage_model", default='/eva_data7/VQ-I2I/summer2winter_yosemite_512_512_settingc_256_final_test/settingc_latest.pt',
                     help="first stage model directory",
                     type=str)
                     
@@ -103,7 +103,7 @@ if __name__ == "__main__":
     transformer_config.model.params.first_stage_model_config.params.embed_dim = args.ed
     transformer_config.model.params.first_stage_model_config.params.n_embed = args.ne
     transformer_config.model.params.first_stage_model_config.z_channels = args.z_channel
-    transformer_config.model.params.f_path = os.path.join(os.getcwd(), args.first_stage_model, 'settingc_latest.pt')
+    transformer_config.model.params.f_path = os.path.join(os.getcwd(), args.first_stage_model)
     transformer_config.model.params.device = str(device)
     model = instantiate_from_config(transformer_config.model)
 
