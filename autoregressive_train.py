@@ -44,7 +44,7 @@ if __name__ == "__main__":
                     help="specify the GPU(s)",
                     type=str)
 
-    parser.add_argument("--root_dir", default='/eva_data0/dataset/',
+    parser.add_argument("--root_dir", default='/eva_data0/dataset/summer2winter_yosemite',
                     help="dataset path",
                     type=str)
 
@@ -91,11 +91,10 @@ if __name__ == "__main__":
 
     save_path = '{}_{}_{}_transformer_final_test'.format(args.dataset, args.ed, args.ne)    # second stage model dir
     print(save_path)
-    root = os.path.join(args.root_dir, args.dataset)
 
 
     # load data
-    train_data = dataset_unpair(root, 'train', 'A', 'B', img_size, img_size)
+    train_data = dataset_unpair(args.root_dir, 'train', 'A', 'B', img_size, img_size)
     train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True)
 
     # load second stage model
