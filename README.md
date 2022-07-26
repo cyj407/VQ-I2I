@@ -3,7 +3,8 @@ PyTorch implementaton of our ECCV 2022 paper "Vector Quantized Image-to-Image Tr
 You can visit our project website [here](https://cyj407.github.io/VQ-I2I/).
 
 In this paper, we propose a novel unified framework which is able to tackle image-to-image translation, unconditional generation of input domains and diverse extension based on an existing image.
-<!-- TEASER HERE -->
+<img src='fig/teaser.png' width="800px">
+
 ## Paper
 [Vector Quantized Image-to-Image Translation]()
 [Yu-Jie Chen*](cyj407.cs09g@nctu.edu.tw), [Shin-I Cheng*](shinicheng.cs09g@nctu.edu.tw), [Wei-Chen Chiu](walon@cs.nctu.edu.tw), [Hung-Yu Tseng](hungyutseng@fb.com), [Hsin-Ying Lee](hlee5@snap.com)
