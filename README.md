@@ -78,6 +78,9 @@ python autoregressive_train.py --device <gpu_num> --root_dir <dataset_path> \
 ```
 - You can also append arguments for hyperparameters, e.g.: `--ne <ne> --ed <ed> --z_channel <z_channel>`. 
 ### Test
+#### Using the pre-trained models
+- Download the [pre-trained transformer models](https://drive.google.com/file/d/1Z-Mp4Wa0gNrR6rOSuNZpaez1QWKB6PfD/view?usp=sharing), here we provide the pre-trained transformer model for the Yosemite dataset.
+    - Yosemite(summer, winter)256X256: --ed 512, --ne 512, --z_channel 256 
 #### Unconditional Generation
 ```
 python save_uncondtional.py --device <gpu_num> \
