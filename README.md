@@ -6,7 +6,7 @@ In this paper, we propose a novel unified framework which is able to tackle imag
 <img src='fig/teaser.png' width="800px">
 
 ## Paper
-[Vector Quantized Image-to-Image Translation]()
+[Vector Quantized Image-to-Image Translation](http://arxiv.org/abs/2207.13286)
 [Yu-Jie Chen*](cyj407.cs09g@nctu.edu.tw), [Shin-I Cheng*](shinicheng.cs09g@nctu.edu.tw), [Wei-Chen Chiu](walon@cs.nctu.edu.tw), [Hung-Yu Tseng](hungyutseng@fb.com), [Hsin-Ying Lee](hlee5@snap.com)
 European Conference on Computer Vision (ECCV), 2022 (* equal contribution)
 
