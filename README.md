@@ -12,6 +12,12 @@ European Conference on Computer Vision (ECCV), 2022 (* equal contribution)
 
 Please cite our paper if you find it useful for your research.  
 ```
+@inproceedings{chen2022eccv,
+ title = {Vector Quantized Image-to-Image Translation},
+ author = {Yu-Jie Chen and Shin-I Cheng and Wei-Chen Chiu and Hung-Yu Tseng and Hsin-Ying Lee},
+ booktitle = {European Conference on Computer Vision (ECCV)},
+ year = {2022}
+}
 ```
 
 ## Installation and Environment
