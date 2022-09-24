@@ -70,7 +70,7 @@ python save_transfer.py --device <gpu_num> --root_dir <dataset_path> --dataset <
 - `--intra_transfer True`: enable intra-domain translation.
 - You can also modify arguments for hyperparameters, e.g.: `--ne <ne> --ed <ed> --z_channel <z_channel>`. 
 ### Using the pre-trained models
-- Download the [pre-trained models](https://drive.google.com/file/d/14cCqd-fFXihw5IKbvyVdaTJkxCx_gwYZ/view?usp=sharing), here we provide the pre-trained models for the four datasets.
+- Download the [pre-trained models](https://mega.nz/file/JTMRBYBQ#BEOd5INGad-j4pv50ma_oFzAzqBbkYZiQnPYXFtp4C0), here we provide the pre-trained models for the four datasets.
     - Yosemite(summer, winter)256X256: --ed 512, --ne 512, --z_channel 256 
     - AFHQ(cat, dog)256X256: --ed 256, --ne 256, --z_channel 256
     - Portrait(portrait, photography)256X256: --ed 256, --ne 256, --z_channel 256  
@@ -86,7 +86,7 @@ python autoregressive_train.py --device <gpu_num> --root_dir <dataset_path> \
 - You can also append arguments for hyperparameters, e.g.: `--ne <ne> --ed <ed> --z_channel <z_channel>`. 
 ### Test
 #### Using the pre-trained models
-- Download the [pre-trained transformer models](https://drive.google.com/file/d/1Z-Mp4Wa0gNrR6rOSuNZpaez1QWKB6PfD/view?usp=sharing), here we provide the pre-trained transformer model for the Yosemite dataset.
+- Download the [pre-trained transformer models](https://mega.nz/file/VX0CUbiC#1QbbngU5BKJJz5SAEx6geZe8kidXt2XjFAtSfNeDRmo), here we provide the pre-trained transformer model for the Yosemite dataset.
     - Yosemite(summer, winter)256X256: --ed 512, --ne 512, --z_channel 256 
 #### Unconditional Generation
 ```
